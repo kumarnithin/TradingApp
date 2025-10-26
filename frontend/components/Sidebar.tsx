@@ -2,65 +2,53 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { 
-  HomeIcon, 
-  ChartBarIcon, 
-  BellIcon, 
-  CurrencyDollarIcon,
-  Cog6ToothIcon,
-  ArrowTrendingUpIcon 
-} from '@heroicons/react/24/outline'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Signals', href: '/dashboard/signals', icon: BellIcon },
-  { name: 'Trades', href: '/dashboard/trades', icon: CurrencyDollarIcon },
-  { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon },
-  { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon },
+  { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+  { name: 'Signals', href: '/dashboard/signals', icon: '🔔' },
+  { name: 'Trades', href: '/dashboard/trades', icon: '💰' },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <div className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-slate-900 border-r border-slate-800">
+    <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:w-64 lg:flex lg:flex-col bg-slate-900 border-r border-slate-700">
       {/* Logo */}
-      <div className="flex items-center h-16 px-6 border-b border-slate-800">
-        <ArrowTrendingUpIcon className="h-8 w-8 text-blue-500" />
-        <span className="ml-3 text-xl font-bold text-white">TradingBot</span>
+      <div className="flex items-center justify-center h-16 border-b border-slate-800">
+        <span className="text-2xl font-bold text-blue-500">🚀</span>
+        <span className="text-xl font-bold text-white ml-2">TradingBot</span>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-2">
+      <nav className="flex-1 px-4 py-8 space-y-4">
         {navigation.map((item) => {
           const isActive = pathname === item.href
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all ${
                 isActive
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-blue-600 text-white shadow-lg'
                   : 'text-gray-300 hover:bg-slate-800 hover:text-white'
               }`}
             >
-              <item.icon className="h-5 w-5 mr-3" />
+              <span className="mr-3 text-lg">{item.icon}</span>
               {item.name}
             </Link>
           )
         })}
       </nav>
 
-      {/* Account info */}
+      {/* User Profile */}
       <div className="px-4 py-4 border-t border-slate-800">
-        <div className="flex items-center">
-          <div className="flex-shrink-0">
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-semibold">U</span>
-            </div>
+        <div className="flex items-center space-x-3 p-3 rounded-lg bg-slate-800/50">
+          <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-bold">D</span>
           </div>
-          <div className="ml-3">
-            <p className="text-sm font-medium text-white">Demo User</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white truncate">Demo User</p>
             <p className="text-xs text-gray-400">Paper Trading</p>
           </div>
         </div>
