@@ -9,7 +9,11 @@ const navigation = [
   { name: 'Signals', href: '/dashboard/signals', icon: '🔔' },
   { name: 'Trades', href: '/dashboard/trades', icon: '💰' },
   { name: 'Generator', href: '/dashboard/generator', icon: '📡' },  // ADD THIS
-  { name: 'Settings', href: '/dashboard/settings', icon: '⚙️' }, // Add this line
+  { name: 'Settings', href: '/dashboard/settings', icon: '⚙️' }, 
+  { name: 'Analytics', href: '/dashboard/analytics', icon: '📊' },
+  { name: 'Risk Manager', href: '/dashboard/risk', icon: '⚠️' }, // Add this line
+  { name: 'Alerts', href: '/dashboard/alerts', icon: '🔔' },
+  { name: 'Strategies', href: '/dashboard/strategies', icon: '🎯' },
 ]
 
 export default function Sidebar() {
