@@ -8,6 +8,8 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
   { name: 'Signals', href: '/dashboard/signals', icon: '🔔' },
   { name: 'Trades', href: '/dashboard/trades', icon: '💰' },
+  { name: 'Generator', href: '/dashboard/generator', icon: '📡' },  // ADD THIS
+  { name: 'Settings', href: '/dashboard/settings', icon: '⚙️' }, // Add this line
 ]
 
 export default function Sidebar() {
