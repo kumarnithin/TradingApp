@@ -1,0 +1,18 @@
+.dashboardWrapper {
+  min-height: 100vh;
+}
+
+.dashboardMain {
+  margin-left: 280px;
+  min-height: 100vh;
+}
+
+.dashboardContent {
+  padding: 24px;
+}
+
+@media (max-width: 1023px) {
+  .dashboardMain {
+    margin-left: 0;
+  }
+}
