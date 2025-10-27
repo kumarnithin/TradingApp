@@ -1,0 +1,128 @@
+.card {
+  border-radius: 20px;
+  padding: 24px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3), 0 0 24px rgba(138, 180, 248, 0.2);
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.iconContainer {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.icon {
+  font-size: 24px;
+}
+
+.changeIndicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.changeIndicator.positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.changeIndicator.negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.arrow {
+  font-size: 14px;
+}
+
+.changeValue {
+  font-weight: 700;
+}
+
+.content {
+  margin-top: 12px;
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+}
+
+.value {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: -0.02em;
+}
+
+/* Gradient Classes */
+.gradientBlue {
+  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+}
+
+.gradientGreen {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.gradientRed {
+  background: linear-gradient(135deg, #ef4444, #f43f5e);
+}
+
+.gradientPurple {
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+}
+
+.gradientOrange {
+  background: linear-gradient(135deg, #f97316, #ef4444);
+}
+
+@media (max-width: 640px) {
+  .value {
+    font-size: 24px;
+  }
+}
