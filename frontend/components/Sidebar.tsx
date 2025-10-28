@@ -14,6 +14,8 @@ const navigation = [
   { name: 'Risk Manager', href: '/dashboard/risk', icon: '⚠️' }, // Add this line
   { name: 'Alerts', href: '/dashboard/alerts', icon: '🔔' },
   { name: 'Strategies', href: '/dashboard/strategies', icon: '🎯' },
+  { name: 'Portfolio', href: '/dashboard/portfolio', icon: '💼' },
+  { name: 'LIT Suite', href: '/dashboard/lit', icon: '🎯' },
 ]
 
 export default function Sidebar() {
