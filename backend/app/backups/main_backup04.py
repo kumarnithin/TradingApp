@@ -1,11 +1,12 @@
 """
 Main FastAPI Application Entry Point
 Trading Automation Platform - Phase 1 Backend
-CORRECT VERSION - Fixed Router Registration
+SIMPLIFIED VERSION - Works with app/routes/api/v1/ structure
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
@@ -82,19 +83,14 @@ async def root():
     return {
         "name": "Trading Automation API",
         "version": "1.0.0",
-        "status": "running"
+        "status": "running",
+        "docs": "/docs"
     }
 
-# ============ Include Routers ============
-
-# IMPORTANT: The routers already have their own prefixes!
-# Do NOT add prefix="/api/v1" here
-# Just include them with prefix="/api/v1" ONLY
-
+# ============ Include Routers - CORRECT IMPORTS ============
 try:
-    from app.routes.api.v1 import ib
-    # ib.py has prefix="/ib", so full path will be /api/v1/ib/...
-    app.include_router(ib.router, prefix="/api/v1", tags=["IB Connection"])
+    from backend.app.routes.api.v1 import ib_backup02
+    app.include_router(ib_backup02.router, prefix="/api/v1", tags=["IB Connection"])
     logger.info("✓ IB Connection router loaded")
 except Exception as e:
     logger.warning(f"⚠ IB Connection router failed: {e}")
@@ -150,6 +146,15 @@ async def api_status():
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0"
     }
+
+# ============ Error Handlers ============
+@app.exception_handler(404)
+async def not_found_handler(request, exc):
+    """Handle 404 errors"""
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "Endpoint not found", "path": str(request.url)}
+    )
 
 # ============ Main Entry Point ============
 if __name__ == "__main__":
