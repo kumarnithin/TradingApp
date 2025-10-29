@@ -7,30 +7,31 @@ import styles from './portfolio.module.css'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-interface Position {
-  id: string
+interface Holding {
   symbol: string
   quantity: number
-  avg_cost: number
-  current_price: number
-  market_value: number
+  avgCost: number
+  currentPrice: number
+  marketValue: number
   totalCost: number
   pnl: number
-  pnl_percent: number
+  pnlPercent: number
   sector: string
-  day_change: number
-  day_change_percent: number
+  dayChange: number
+  dayChangePercent: number
 }
 
-interface PortfolioSummary {
-  total_value: number
-  total_cost: number
-  total_pnl: number
-  total_pnl_percent: number
-  day_change: number
-  day_change_percent: number
+interface Portfolio {
+  id: string
+  name: string
+  totalValue: number
+  totalCost: number
+  totalPnL: number
+  totalPnLPercent: number
+  dayChange: number
+  dayChangePercent: number
+  holdings: Holding[]
   cash: number
-  buying_power?: number
 }
 
 interface WatchlistItem {
@@ -50,8 +51,8 @@ interface Watchlist {
 }
 
 export default function PortfolioPage() {
-  const [positions, setPositions] = useState<Position[]>([])
-  const [summary, setSummary] = useState<PortfolioSummary | null>(null)
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+  const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null)
   const [watchlists, setWatchlists] = useState<Watchlist[]>([
     { id: '1', name: 'My Watchlist', symbols: [] }
   ])
@@ -62,15 +63,16 @@ export default function PortfolioPage() {
   const [showWatchlistModal, setShowWatchlistModal] = useState(false)
   const [editingWatchlist, setEditingWatchlist] = useState<Watchlist | null>(null)
   const [watchlistName, setWatchlistName] = useState('')
-  const [showAddSymbol, setShowAddSymbol] = useState(false)
-  const [symbolToAdd, setSymbolToAdd] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
+  
   const chartContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetchPortfolioData()
-    const interval = setInterval(fetchPortfolioData, 5000)
+    fetchPortfolios()
+    fetchWatchlistData()
+    const interval = setInterval(() => {
+      fetchWatchlistData()
+      if (selectedPortfolio) fetchPortfolios()
+    }, 5000) // Update every 5 seconds
     return () => clearInterval(interval)
   }, [])
 
@@ -80,95 +82,33 @@ export default function PortfolioPage() {
     }
   }, [selectedSymbol])
 
-  const fetchPortfolioData = async () => {
+  const fetchPortfolios = async () => {
     try {
-      setError(null)
-      
-      // Mock data if backend not available
-      const mockSummary: PortfolioSummary = {
-        total_value: 250000,
-        total_cost: 245000,
-        total_pnl: 5000,
-        total_pnl_percent: 2.04,
-        day_change: 1250,
-        day_change_percent: 0.5,
-        cash: 50000,
-        buying_power: 100000
+      const response = await axios.get(`${API_URL}/api/v1/portfolios`)
+      setPortfolios(response.data)
+      if (response.data.length > 0 && !selectedPortfolio) {
+        setSelectedPortfolio(response.data[0])
       }
-
-      const mockPositions: Position[] = [
-        {
-          id: '1',
-          symbol: 'AAPL',
-          quantity: 100,
-          avg_cost: 150.00,
-          current_price: 155.00,
-          market_value: 15500,
-          totalCost: 15000,
-          pnl: 500,
-          pnl_percent: 3.33,
-          sector: 'Technology',
-          day_change: 100,
-          day_change_percent: 0.65
-        },
-        {
-          id: '2',
-          symbol: 'MSFT',
-          quantity: 50,
-          avg_cost: 380.00,
-          current_price: 385.00,
-          market_value: 19250,
-          totalCost: 19000,
-          pnl: 250,
-          pnl_percent: 1.32,
-          sector: 'Technology',
-          day_change: 50,
-          day_change_percent: 0.13
-        },
-        {
-          id: '3',
-          symbol: 'TSLA',
-          quantity: 75,
-          avg_cost: 230.00,
-          current_price: 245.00,
-          market_value: 18375,
-          totalCost: 17250,
-          pnl: 1125,
-          pnl_percent: 6.52,
-          sector: 'Automotive',
-          day_change: 225,
-          day_change_percent: 0.92
-        }
-      ]
-
-      try {
-        const [positionsResponse, summaryResponse] = await Promise.all([
-          axios.get(`${API_URL}/api/v1/portfolio/positions`, { timeout: 5000 }),
-          axios.get(`${API_URL}/api/v1/portfolio/summary`, { timeout: 5000 })
-        ])
-
-        if (positionsResponse.data?.positions) {
-          setPositions(positionsResponse.data.positions)
-        } else {
-          setPositions(mockPositions)
-        }
-
-        if (summaryResponse.data) {
-          setSummary(summaryResponse.data)
-        } else {
-          setSummary(mockSummary)
-        }
-      } catch (apiError) {
-        console.warn('Backend not available, using mock data:', apiError)
-        setPositions(mockPositions)
-        setSummary(mockSummary)
-      }
-
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching portfolio:', error)
-      setError('Failed to fetch portfolio data')
+      console.error('Error fetching portfolios:', error)
       setLoading(false)
+    }
+  }
+
+  const fetchWatchlistData = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/v1/watchlist`)
+      // Update the active watchlist with fetched data
+      const activeWatchlist = getActiveWatchlist()
+      if (activeWatchlist) {
+        const updatedWatchlists = watchlists.map(w =>
+          w.id === activeWatchlist.id ? { ...w, symbols: response.data } : w
+        )
+        setWatchlists(updatedWatchlists)
+      }
+    } catch (error) {
+      console.error('Error fetching watchlist:', error)
     }
   }
 
@@ -200,7 +140,7 @@ export default function PortfolioPage() {
 
   const handleUpdateWatchlist = () => {
     if (!editingWatchlist || !watchlistName.trim()) return
-
+    
     const updated = watchlists.map(w =>
       w.id === editingWatchlist.id ? { ...w, name: watchlistName } : w
     )
@@ -216,7 +156,7 @@ export default function PortfolioPage() {
       return
     }
     if (!confirm('Delete this watchlist?')) return
-
+    
     const filtered = watchlists.filter(w => w.id !== id)
     setWatchlists(filtered)
     if (activeWatchlistId === id) {
@@ -224,99 +164,116 @@ export default function PortfolioPage() {
     }
   }
 
-  const handleAddSymbolToWatchlist = () => {
-    if (!symbolToAdd.trim()) return
-
+  const handleAddSymbolToWatchlist = async (symbol: string) => {
     const activeWatchlist = getActiveWatchlist()
     if (!activeWatchlist) return
-
-    if (activeWatchlist.symbols.some(s => s.symbol === symbolToAdd)) {
+    
+    // Check if symbol already exists
+    if (activeWatchlist.symbols.some(s => s.symbol === symbol)) {
       alert('Symbol already in watchlist')
       return
     }
-
-    const newSymbol: WatchlistItem = {
-      symbol: symbolToAdd.toUpperCase(),
-      name: symbolToAdd.toUpperCase(),
-      price: 0,
-      change: 0,
-      changePercent: 0,
-      volume: 0,
-      marketCap: ''
+    
+    try {
+      // Try to fetch real data
+      await axios.post(`${API_URL}/api/v1/watchlist`, { symbol: symbol.toUpperCase() })
+      fetchWatchlistData()
+    } catch (error) {
+      // If API fails, add mock data
+      const newSymbol: WatchlistItem = {
+        symbol: symbol.toUpperCase(),
+        name: symbol.toUpperCase(),
+        price: 0,
+        change: 0,
+        changePercent: 0,
+        volume: 0,
+        marketCap: ''
+      }
+      
+      const updated = watchlists.map(w =>
+        w.id === activeWatchlist.id
+          ? { ...w, symbols: [...w.symbols, newSymbol] }
+          : w
+      )
+      setWatchlists(updated)
     }
-
-    const updated = watchlists.map(w =>
-      w.id === activeWatchlist.id
-        ? { ...w, symbols: [...w.symbols, newSymbol] }
-        : w
-    )
-    setWatchlists(updated)
-    setSymbolToAdd('')
-    setShowAddSymbol(false)
   }
 
-  const handleRemoveSymbolFromWatchlist = (symbol: string) => {
+  const handleRemoveSymbolFromWatchlist = async (symbol: string) => {
     if (!confirm(`Remove ${symbol}?`)) return
-
+    
     const activeWatchlist = getActiveWatchlist()
     if (!activeWatchlist) return
-
-    const updated = watchlists.map(w =>
-      w.id === activeWatchlist.id
-        ? { ...w, symbols: w.symbols.filter(s => s.symbol !== symbol) }
-        : w
-    )
-    setWatchlists(updated)
+    
+    try {
+      await axios.delete(`${API_URL}/api/v1/watchlist/${symbol}`)
+      fetchWatchlistData()
+    } catch (error) {
+      // If API fails, remove from local state
+      const updated = watchlists.map(w =>
+        w.id === activeWatchlist.id
+          ? { ...w, symbols: w.symbols.filter(s => s.symbol !== symbol) }
+          : w
+      )
+      setWatchlists(updated)
+    }
   }
 
   const initChart = async () => {
     if (!chartContainerRef.current) return
 
+    // Clear previous chart
     chartContainerRef.current.innerHTML = ''
 
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: '#d1d5db',
+      },
+      grid: {
+        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: 400,
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+      },
+    })
+
+    const candlestickSeries = chart.addCandlestickSeries({
+      upColor: '#22c55e',
+      downColor: '#ef4444',
+      borderVisible: false,
+      wickUpColor: '#22c55e',
+      wickDownColor: '#ef4444',
+    })
+
+    // Fetch chart data
     try {
-      const chart = createChart(chartContainerRef.current, {
-        layout: {
-          background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#d1d5db',
-        },
-        grid: {
-          vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
-          horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
-        },
-        width: chartContainerRef.current.clientWidth,
-        height: 400,
-        timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-        },
-      })
-
-      const candlestickSeries = chart.addCandlestickSeries({
-        upColor: '#22c55e',
-        downColor: '#ef4444',
-        borderVisible: false,
-        wickUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
-      })
-
+      const response = await axios.get(`${API_URL}/api/v1/market/chart/${selectedSymbol}`)
+      candlestickSeries.setData(response.data)
+    } catch (error) {
+      console.error('Error fetching chart data:', error)
+      // Mock data for demonstration
       const mockData = generateMockChartData()
       candlestickSeries.setData(mockData)
-      chart.timeScale().fitContent()
+    }
 
-      const handleResize = () => {
-        if (chartContainerRef.current) {
-          chart.applyOptions({ width: chartContainerRef.current.clientWidth })
-        }
-      }
-      window.addEventListener('resize', handleResize)
+    chart.timeScale().fitContent()
 
-      return () => {
-        window.removeEventListener('resize', handleResize)
-        chart.remove()
+    // Handle window resize
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth })
       }
-    } catch (err) {
-      console.error('Chart error:', err)
+    }
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      chart.remove()
     }
   }
 
@@ -333,7 +290,7 @@ export default function PortfolioPage() {
       const close = open + change
       const high = Math.max(open, close) + Math.random() * 2
       const low = Math.min(open, close) - Math.random() * 2
-
+      
       data.push({
         time: time as any,
         open,
@@ -341,7 +298,7 @@ export default function PortfolioPage() {
         low,
         close
       })
-
+      
       price = close
     }
 
@@ -357,37 +314,22 @@ export default function PortfolioPage() {
     )
   }
 
-  const portfolio = {
+  const portfolio = selectedPortfolio || {
     name: 'Default Portfolio',
-    totalValue: summary?.total_value || 0,
-    totalCost: summary?.total_cost || 0,
-    totalPnL: summary?.total_pnl || 0,
-    totalPnLPercent: summary?.total_pnl_percent || 0,
-    dayChange: summary?.day_change || 0,
-    dayChangePercent: summary?.day_change_percent || 0,
-    holdings: positions,
-    cash: summary?.cash || 0
+    totalValue: 0,
+    totalCost: 0,
+    totalPnL: 0,
+    totalPnLPercent: 0,
+    dayChange: 0,
+    dayChangePercent: 0,
+    holdings: [],
+    cash: 0
   }
 
   const activeWatchlist = getActiveWatchlist()
 
   return (
     <div className={styles.portfolioPage}>
-      {/* Error Banner */}
-      {error && (
-        <div style={{
-          padding: '12px',
-          background: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid rgba(239, 68, 68, 0.3)',
-          borderRadius: '8px',
-          marginBottom: '20px',
-          color: '#ef4444',
-          fontSize: '13px'
-        }}>
-          ⚠️ {error}
-        </div>
-      )}
-
       {/* Header */}
       <div className={styles.pageHeader}>
         <div>
@@ -456,7 +398,7 @@ export default function PortfolioPage() {
                   portfolio.holdings.map((holding, idx) => (
                     <tr key={idx}>
                       <td className={styles.symbolCell}>
-                        <button
+                        <button 
                           className={styles.symbolButton}
                           onClick={() => setSelectedSymbol(holding.symbol)}
                         >
@@ -464,19 +406,19 @@ export default function PortfolioPage() {
                         </button>
                       </td>
                       <td>{holding.quantity}</td>
-                      <td>${holding.avg_cost.toFixed(2)}</td>
-                      <td className={styles.priceCell}>${holding.current_price.toFixed(2)}</td>
-                      <td>${holding.market_value.toLocaleString()}</td>
+                      <td>${holding.avgCost.toFixed(2)}</td>
+                      <td className={styles.priceCell}>${holding.currentPrice.toFixed(2)}</td>
+                      <td>${holding.marketValue.toLocaleString()}</td>
                       <td className={holding.pnl >= 0 ? styles.positive : styles.negative}>
-                        ${holding.pnl.toFixed(2)}<br />
+                        ${holding.pnl.toFixed(2)}<br/>
                         <span className={styles.percentText}>
-                          ({holding.pnl_percent >= 0 ? '+' : ''}{holding.pnl_percent.toFixed(2)}%)
+                          ({holding.pnlPercent >= 0 ? '+' : ''}{holding.pnlPercent.toFixed(2)}%)
                         </span>
                       </td>
-                      <td className={holding.day_change >= 0 ? styles.positive : styles.negative}>
-                        ${holding.day_change.toFixed(2)}<br />
+                      <td className={holding.dayChange >= 0 ? styles.positive : styles.negative}>
+                        ${holding.dayChange.toFixed(2)}<br/>
                         <span className={styles.percentText}>
-                          ({holding.day_change_percent >= 0 ? '+' : ''}{holding.day_change_percent.toFixed(2)}%)
+                          ({holding.dayChangePercent >= 0 ? '+' : ''}{holding.dayChangePercent.toFixed(2)}%)
                         </span>
                       </td>
                       <td>
@@ -501,7 +443,7 @@ export default function PortfolioPage() {
           <div className={styles.chartHeader}>
             <h2 className={styles.sectionTitle}>📈 Live Chart: {selectedSymbol}</h2>
             <div className={styles.chartControls}>
-              <select
+              <select 
                 value={selectedSymbol}
                 onChange={(e) => setSelectedSymbol(e.target.value)}
                 className={styles.symbolSelect}
@@ -519,13 +461,13 @@ export default function PortfolioPage() {
         </div>
       </div>
 
-      {/* Watchlist Section */}
+      {/* Watchlist Section - ENHANCED */}
       <div className={`${styles.watchlistSection} glass-light`}>
         <div className={styles.watchlistHeader}>
           <h2 className={styles.sectionTitle}>👀 Watchlists</h2>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              className={styles.btnAdd}
+            <button 
+              className={styles.btnAdd} 
               onClick={() => {
                 setEditingWatchlist(null)
                 setWatchlistName('')
@@ -539,9 +481,9 @@ export default function PortfolioPage() {
         </div>
 
         {/* Watchlist Tabs */}
-        <div style={{
-          display: 'flex',
-          gap: '8px',
+        <div style={{ 
+          display: 'flex', 
+          gap: '8px', 
           marginBottom: '20px',
           overflowX: 'auto',
           paddingBottom: '8px'
@@ -552,8 +494,8 @@ export default function PortfolioPage() {
                 onClick={() => setActiveWatchlistId(wl.id)}
                 style={{
                   padding: '10px 16px',
-                  background: activeWatchlistId === wl.id
-                    ? 'rgba(138, 180, 248, 0.2)'
+                  background: activeWatchlistId === wl.id 
+                    ? 'rgba(138, 180, 248, 0.2)' 
                     : 'rgba(0, 0, 0, 0.2)',
                   border: activeWatchlistId === wl.id
                     ? '1px solid rgba(138, 180, 248, 0.4)'
@@ -571,7 +513,7 @@ export default function PortfolioPage() {
               >
                 {wl.name} ({wl.symbols.length})
               </button>
-              <div style={{
+              <div style={{ 
                 position: 'absolute',
                 top: '-8px',
                 right: '-8px',
@@ -630,9 +572,9 @@ export default function PortfolioPage() {
         {/* Active Watchlist Content */}
         {activeWatchlist && (
           <>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
               alignItems: 'center',
               marginBottom: '16px',
               padding: '12px',
@@ -642,77 +584,17 @@ export default function PortfolioPage() {
               <span style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '13px' }}>
                 {activeWatchlist.symbols.length} symbols in {activeWatchlist.name}
               </span>
-              <button
+              <button 
                 className={styles.btnAdd}
-                onClick={() => setShowAddSymbol(true)}
+                onClick={() => {
+                  const symbol = prompt('Enter symbol (e.g., AAPL):')
+                  if (symbol) handleAddSymbolToWatchlist(symbol)
+                }}
                 style={{ padding: '6px 12px', fontSize: '12px' }}
               >
                 + Add Symbol
               </button>
             </div>
-
-            {showAddSymbol && (
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                marginBottom: '16px',
-                padding: '12px',
-                background: 'rgba(138, 180, 248, 0.1)',
-                borderRadius: '8px'
-              }}>
-                <input
-                  type="text"
-                  value={symbolToAdd}
-                  onChange={(e) => setSymbolToAdd(e.target.value.toUpperCase())}
-                  placeholder="Enter symbol (e.g., AAPL)"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') handleAddSymbolToWatchlist()
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    background: 'rgba(0, 0, 0, 0.2)',
-                    border: '1px solid rgba(138, 180, 248, 0.3)',
-                    borderRadius: '6px',
-                    color: 'white',
-                    fontSize: '12px'
-                  }}
-                />
-                <button
-                  onClick={handleAddSymbolToWatchlist}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'rgba(34, 197, 94, 0.3)',
-                    border: '1px solid rgba(34, 197, 94, 0.5)',
-                    borderRadius: '6px',
-                    color: '#22c55e',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}
-                >
-                  Add
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAddSymbol(false)
-                    setSymbolToAdd('')
-                  }}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'rgba(239, 68, 68, 0.3)',
-                    border: '1px solid rgba(239, 68, 68, 0.5)',
-                    borderRadius: '6px',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
 
             <div className={styles.watchlistGrid}>
               {activeWatchlist.symbols.length > 0 ? (
@@ -723,7 +605,7 @@ export default function PortfolioPage() {
                         <h4 className={styles.watchlistSymbol}>{item.symbol}</h4>
                         <p className={styles.watchlistName}>{item.name}</p>
                       </div>
-                      <button
+                      <button 
                         className={styles.btnRemove}
                         onClick={() => handleRemoveSymbolFromWatchlist(item.symbol)}
                       >
@@ -738,7 +620,7 @@ export default function PortfolioPage() {
                     </div>
                     <div className={styles.watchlistFooter}>
                       <span>Vol: {item.volume.toLocaleString()}</span>
-                      <button
+                      <button 
                         className={styles.btnChart}
                         onClick={() => setSelectedSymbol(item.symbol)}
                       >
@@ -763,8 +645,8 @@ export default function PortfolioPage() {
           <div className={styles.modalContent}>
             <div className={styles.modalHeader}>
               <h3>{editingWatchlist ? 'Edit Watchlist' : 'Create New Watchlist'}</h3>
-              <button
-                className={styles.closeButton}
+              <button 
+                className={styles.closeButton} 
                 onClick={() => {
                   setShowWatchlistModal(false)
                   setEditingWatchlist(null)
@@ -775,7 +657,7 @@ export default function PortfolioPage() {
               </button>
             </div>
             <div className={styles.modalBody}>
-              <input
+              <input 
                 type="text"
                 value={watchlistName}
                 onChange={(e) => setWatchlistName(e.target.value)}
@@ -790,8 +672,8 @@ export default function PortfolioPage() {
               />
             </div>
             <div className={styles.modalFooter}>
-              <button
-                className={styles.btnCancel}
+              <button 
+                className={styles.btnCancel} 
                 onClick={() => {
                   setShowWatchlistModal(false)
                   setEditingWatchlist(null)
@@ -801,7 +683,7 @@ export default function PortfolioPage() {
               >
                 Cancel
               </button>
-              <button
+              <button 
                 className={styles.btnAdd}
                 onClick={() => {
                   editingWatchlist ? handleUpdateWatchlist() : handleCreateWatchlist()

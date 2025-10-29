@@ -2,6 +2,11 @@ from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Foreig
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
+from sqlalchemy import Column, String, Integer, DateTime
+from sqlalchemy.dialects.postgresql import UUID
+from app.database import Base
+import uuid
+from datetime import datetime
 
 class User(Base):
     """User model for authentication and account management"""
@@ -101,3 +106,16 @@ class ConnectionLog(Base):
     message = Column(Text, nullable=True)
     
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    
+class IBConnection(Base):
+    __tablename__ = "ib_connections"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, nullable=False)
+    host = Column(String(50), nullable=False)
+    port = Column(Integer, nullable=False)
+    client_id = Column(Integer, nullable=False)
+    status = Column(String(20), default='disconnected')
+    last_connected = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
