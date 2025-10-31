@@ -2,679 +2,342 @@
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import styles from './settings.module.css'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface IBAccount {
-  id: string
-  name: string
-  accountType: 'DEMO' | 'LIVE'
-  host: string
-  port: number
-  clientId: number
-  isConnected: boolean
-  connectionTime?: string
-  lastActivity?: string
-  isFavorite: boolean
-  accountNumber?: string
-  buyingPower?: number
+  account_name: string
+  account_type: string
+  account_pattern: string
   equity?: number
+  cash?: number
+  buying_power?: number
+  error?: string
 }
 
 interface ConnectionStatus {
-  isConnected: boolean
-  accountInfo?: any
-  uptime?: number
-  latency?: number
-  lastChecked?: string
+  connected: boolean
+  account_type?: string
+  account_name?: string
+  account?: string
+  equity?: number
+  buying_power?: number
+  timestamp?: string
 }
 
-interface ConnectionHistoryEntry {
-  id: number
-  type: 'success' | 'error' | 'info' | 'warning'
-  message: string
-  timestamp: string
-}
-
-export default function IBConnectionSettingsPage() {
-  const [accounts, setAccounts] = useState<IBAccount[]>([
-    {
-      id: '1',
-      name: 'Demo Account',
-      accountType: 'DEMO',
-      host: 'localhost',
-      port: 7497,
-      clientId: 1,
-      isConnected: false,
-      isFavorite: true
-    },
-    {
-      id: '2',
-      name: 'Live01',
-      accountType: 'LIVE',
-      host: 'localhost',
-      port: 7496,
-      clientId: 2,
-      isConnected: false,
-      isFavorite: false
-    },
-    {
-      id: '3',
-      name: 'Live02',
-      accountType: 'LIVE',
-      host: 'localhost',
-      port: 7495,
-      clientId: 3,
-      isConnected: false,
-      isFavorite: false
-    }
-  ])
-
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
-    isConnected: false,
-    uptime: 0,
-    latency: 0
-  })
-
+export default function SettingsPage() {
+  const [availableAccounts, setAvailableAccounts] = useState<IBAccount[]>([])
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({ connected: false })
   const [loading, setLoading] = useState(false)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [editingAccount, setEditingAccount] = useState<IBAccount | null>(null)
-  const [connectionHistory, setConnectionHistory] = useState<ConnectionHistoryEntry[]>([])
-  const [formData, setFormData] = useState({
-    name: '',
-    accountType: 'DEMO' as const,
-    host: 'localhost',
-    port: 7497,
-    clientId: 1
-  })
-  const [testingConnection, setTestingConnection] = useState(false)
-  const [connectionStats, setConnectionStats] = useState({
-    totalConnections: 0,
-    successfulConnections: 0,
-    failedConnections: 0,
-    averageLatency: 0
-  })
+  const [scanningAccounts, setScanningAccounts] = useState(false)
+  const [selectedAccountType, setSelectedAccountType] = useState<'demo' | 'live'>('demo')
+  const [connectionHistory, setConnectionHistory] = useState<any[]>([])
 
-  // Check connection status on mount and periodically
   useEffect(() => {
     checkConnectionStatus()
     const interval = setInterval(checkConnectionStatus, 5000)
     return () => clearInterval(interval)
   }, [])
 
-  // Fetch accounts from backend
-  useEffect(() => {
-    fetchAccountsFromBackend()
-  }, [])
-
-  const fetchAccountsFromBackend = async () => {
+  const checkConnectionStatus = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/v1/ib/accounts`, { timeout: 5000 })
-      if (response.data?.accounts) {
-        addToHistory('info', 'Accounts loaded from backend')
-      }
+      const response = await axios.get(`${API_URL}/api/v1/ib/connection-status`)
+      setConnectionStatus(response.data)
     } catch (error) {
-      console.warn('Backend not available, using local accounts')
+      console.error('Error checking connection:', error)
+      setConnectionStatus({ connected: false })
     }
   }
 
-  const checkConnectionStatus = async () => {
+  const scanAccounts = async () => {
+    setScanningAccounts(true)
+    addToHistory('info', `Scanning ${selectedAccountType.toUpperCase()} accounts...`)
+    
     try {
-      const response = await axios.get(`${API_URL}/api/v1/ib/connection-status`, { timeout: 5000 })
-      setConnectionStatus({
-        isConnected: response.data?.connected || false,
-        accountInfo: response.data?.account,
-        latency: Math.random() * 50 + 10, // Mock latency 10-60ms
-        lastChecked: new Date().toISOString()
+      const response = await axios.post(`${API_URL}/api/v1/ib/get-accounts`, {
+        account_type: selectedAccountType
       })
-    } catch (error) {
-      console.warn('Could not check connection status')
-      // Set mock status if backend unavailable
-      setConnectionStatus({
-        isConnected: false,
-        latency: 0,
-        lastChecked: new Date().toISOString()
-      })
+      
+      if (response.data.status === 'success' && response.data.accounts) {
+        setAvailableAccounts(response.data.accounts)
+        addToHistory('success', `Found ${response.data.count} ${selectedAccountType.toUpperCase()} account(s)`)
+      } else {
+        setAvailableAccounts([])
+        addToHistory('warning', response.data.message || 'No accounts found')
+      }
+    } catch (error: any) {
+      addToHistory('error', `Failed to scan accounts: ${error.response?.data?.detail || error.message}`)
+      setAvailableAccounts([])
     }
+    
+    setScanningAccounts(false)
   }
 
   const handleConnect = async (account: IBAccount) => {
     setLoading(true)
+    addToHistory('info', `Connecting to ${account.account_name}...`)
+    
     try {
       const response = await axios.post(`${API_URL}/api/v1/ib/connect`, {
-        host: account.host,
-        port: account.port,
-        client_id: account.clientId
-      }, { timeout: 10000 })
-
-      // Update account status
-      setAccounts(accounts.map(acc =>
-        acc.id === account.id
-          ? {
-              ...acc,
-              isConnected: true,
-              connectionTime: new Date().toISOString(),
-              accountNumber: response.data?.account_id || acc.accountNumber,
-              buyingPower: response.data?.buying_power,
-              equity: response.data?.equity
-            }
-          : { ...acc, isConnected: false } // Disconnect others
-      ))
-
-      // Update stats
-      setConnectionStats(prev => ({
-        ...prev,
-        totalConnections: prev.totalConnections + 1,
-        successfulConnections: prev.successfulConnections + 1
-      }))
-
-      addToHistory('success', `✓ Successfully connected to ${account.name}`)
+        account_name: account.account_name
+      })
       
-      // Check status after connection
-      setTimeout(checkConnectionStatus, 1000)
+      if (response.data.status === 'success') {
+        setConnectionStatus({
+          connected: true,
+          account_name: account.account_name,
+          account_type: account.account_type,
+          ...response.data
+        })
+        addToHistory('success', `✅ Connected to ${account.account_name}`)
+      } else {
+        addToHistory('error', `Failed to connect: ${response.data.error}`)
+      }
     } catch (error: any) {
-      setConnectionStats(prev => ({
-        ...prev,
-        totalConnections: prev.totalConnections + 1,
-        failedConnections: prev.failedConnections + 1
-      }))
-      addToHistory('error', `✗ Failed to connect to ${account.name}: ${error.message}`)
-    } finally {
-      setLoading(false)
+      addToHistory('error', `Connection failed: ${error.response?.data?.detail || error.message}`)
     }
+    
+    setLoading(false)
   }
 
-  const handleDisconnect = async (account: IBAccount) => {
+  const handleDisconnect = async () => {
     setLoading(true)
+    addToHistory('info', 'Disconnecting...')
+    
     try {
-      await axios.post(`${API_URL}/api/v1/ib/disconnect`, {}, { timeout: 10000 })
-      
-      setAccounts(accounts.map(acc =>
-        acc.id === account.id
-          ? { ...acc, isConnected: false, accountNumber: undefined, buyingPower: undefined }
-          : acc
-      ))
-
-      addToHistory('info', `⊗ Disconnected from ${account.name}`)
+      await axios.post(`${API_URL}/api/v1/ib/disconnect`)
+      setConnectionStatus({ connected: false })
+      addToHistory('success', '✅ Disconnected successfully')
     } catch (error: any) {
-      addToHistory('error', `✗ Failed to disconnect: ${error.message}`)
-    } finally {
-      setLoading(false)
+      addToHistory('error', `Disconnection failed: ${error.message}`)
     }
+    
+    setLoading(false)
   }
 
-  const handleTestConnection = async (account: IBAccount) => {
-    setTestingConnection(true)
-    try {
-      const response = await axios.post(`${API_URL}/api/v1/ib/test-connection`, {
-        host: account.host,
-        port: account.port,
-        client_id: account.clientId
-      }, { timeout: 5000 })
-
-      addToHistory('success', `✓ Connection test passed for ${account.name} (Latency: ${response.data?.latency}ms)`)
-    } catch (error: any) {
-      addToHistory('warning', `⚠ Connection test failed for ${account.name}`)
-    } finally {
-      setTestingConnection(false)
-    }
-  }
-
-  const handleAddAccount = () => {
-    if (!formData.name.trim()) {
-      addToHistory('error', 'Account name is required')
-      return
-    }
-
-    const newAccount: IBAccount = {
-      id: Date.now().toString(),
-      name: formData.name,
-      accountType: formData.accountType,
-      host: formData.host,
-      port: formData.port,
-      clientId: formData.clientId,
-      isConnected: false,
-      isFavorite: false
-    }
-
-    setAccounts([...accounts, newAccount])
-    addToHistory('info', `✓ Added new account: ${formData.name}`)
-    resetForm()
-    setShowAddModal(false)
-  }
-
-  const handleUpdateAccount = () => {
-    if (!editingAccount || !formData.name.trim()) {
-      addToHistory('error', 'Account name is required')
-      return
-    }
-
-    setAccounts(accounts.map(acc =>
-      acc.id === editingAccount.id
-        ? {
-            ...acc,
-            name: formData.name,
-            accountType: formData.accountType,
-            host: formData.host,
-            port: formData.port,
-            clientId: formData.clientId
-          }
-        : acc
-    ))
-
-    addToHistory('info', `✓ Updated account: ${formData.name}`)
-    resetForm()
-    setShowAddModal(false)
-  }
-
-  const handleDeleteAccount = (accountId: string) => {
-    if (confirm('Are you sure you want to delete this account?')) {
-      const accountName = accounts.find(acc => acc.id === accountId)?.name
-      setAccounts(accounts.filter(acc => acc.id !== accountId))
-      addToHistory('warning', `⊗ Deleted account: ${accountName}`)
-    }
-  }
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      accountType: 'DEMO',
-      host: 'localhost',
-      port: 7497,
-      clientId: 1
-    })
-    setEditingAccount(null)
-  }
-
-  const openEditModal = (account: IBAccount) => {
-    setEditingAccount(account)
-    setFormData({
-      name: account.name,
-      accountType: account.accountType,
-      host: account.host,
-      port: account.port,
-      clientId: account.clientId
-    })
-    setShowAddModal(true)
-  }
-
-  const addToHistory = (type: 'success' | 'error' | 'info' | 'warning', message: string) => {
-    const newEntry: ConnectionHistoryEntry = {
+  const addToHistory = (type: string, message: string) => {
+    const newEntry = {
       id: Date.now(),
       type,
       message,
       timestamp: new Date().toISOString()
     }
-    setConnectionHistory([newEntry, ...connectionHistory.slice(0, 19)]) // Keep last 20
+    setConnectionHistory([newEntry, ...connectionHistory.slice(0, 9)])
   }
-
-  const toggleFavorite = (accountId: string) => {
-    setAccounts(accounts.map(acc =>
-      acc.id === accountId ? { ...acc, isFavorite: !acc.isFavorite } : acc
-    ))
-  }
-
-  const activeAccounts = accounts.filter(acc => acc.isConnected).length
-  const totalAccounts = accounts.length
-  const successRate = connectionStats.totalConnections > 0
-    ? ((connectionStats.successfulConnections / connectionStats.totalConnections) * 100).toFixed(1)
-    : '0'
 
   return (
-    <div className={styles.settingsPage}>
+    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
-      <div className={styles.pageHeader}>
-        <div>
-          <h1 className={styles.pageTitle}>🔌 IB Connection Settings</h1>
-          <p className={styles.pageSubtitle}>Manage Interactive Brokers connections and account settings</p>
-        </div>
-        <div className={styles.headerButtons}>
-          <button
-            className={styles.btnAdd}
-            onClick={() => {
-              resetForm()
-              setShowAddModal(true)
-            }}
-          >
-            + Add Account
-          </button>
-        </div>
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+          🔌 IB Connection Manager
+        </h1>
+        <p style={{ color: '#666' }}>Connect to Interactive Brokers accounts</p>
       </div>
 
-      {/* Overview Stats */}
-      <div className={styles.summaryGrid}>
-        <div className={styles.summaryCard}>
-          <div className={styles.cardLabel}>Active Connections</div>
-          <div className={styles.cardValue}>{activeAccounts}</div>
-          <div className={styles.cardSubtext}>of {totalAccounts} accounts</div>
+      {/* Connection Status Card */}
+      <div style={{ 
+        background: connectionStatus.connected ? '#10b981' : '#ef4444',
+        color: 'white',
+        padding: '1.5rem',
+        borderRadius: '8px',
+        marginBottom: '2rem'
+      }}>
+        <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+          {connectionStatus.connected ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}
         </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.cardLabel}>Total Accounts</div>
-          <div className={styles.cardValue}>{totalAccounts}</div>
-          <div className={styles.cardSubtext}>Configured</div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.cardLabel}>Connection Status</div>
-          <div className={`${styles.cardValue} ${connectionStatus.isConnected ? styles.positive : styles.negative}`}>
-            {connectionStatus.isConnected ? '🟢 Connected' : '🔴 Disconnected'}
-          </div>
-          <div className={styles.cardSubtext}>{connectionStatus.latency?.toFixed(0)}ms latency</div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.cardLabel}>Success Rate</div>
-          <div className={styles.cardValue}>{successRate}%</div>
-          <div className={styles.cardSubtext}>{connectionStats.successfulConnections}/{connectionStats.totalConnections}</div>
-        </div>
-      </div>
-
-      {/* Main Grid */}
-      <div className={styles.mainGrid}>
-        {/* Accounts Section */}
-        <div className={`${styles.accountsSection} glass-light`}>
-          <h2 className={styles.sectionTitle}>📋 Configured Accounts</h2>
-
-          <div className={styles.accountsGrid}>
-            {accounts.map(account => (
-              <div key={account.id} className={`${styles.accountCard} ${account.isConnected ? styles.connected : ''}`}>
-                {/* Card Header */}
-                <div className={styles.cardHeader}>
-                  <div className={styles.accountTitle}>
-                    <span className={styles.icon}>
-                      {account.accountType === 'DEMO' ? '🎯' : '💰'}
-                    </span>
-                    <div>
-                      <h3 className={styles.accountName}>{account.name}</h3>
-                      <span className={`${styles.accountType} ${account.accountType.toLowerCase()}`}>
-                        {account.accountType}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    className={styles.favoriteBtn}
-                    onClick={() => toggleFavorite(account.id)}
-                    title={account.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                  >
-                    {account.isFavorite ? '⭐' : '☆'}
-                  </button>
-                </div>
-
-                {/* Connection Status */}
-                <div className={`${styles.statusBadge} ${account.isConnected ? styles.connected : styles.disconnected}`}>
-                  {account.isConnected ? '🟢 CONNECTED' : '⚪ DISCONNECTED'}
-                </div>
-
-                {/* Connection Details */}
-                <div className={styles.details}>
-                  <div className={styles.detailRow}>
-                    <span className={styles.label}>Host:</span>
-                    <span className={styles.value}>{account.host}</span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.label}>Port:</span>
-                    <span className={styles.value}>{account.port}</span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.label}>Client ID:</span>
-                    <span className={styles.value}>{account.clientId}</span>
-                  </div>
-                  {account.accountNumber && (
-                    <div className={styles.detailRow}>
-                      <span className={styles.label}>Account #:</span>
-                      <span className={styles.value}>{account.accountNumber}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Connection Stats */}
-                {account.isConnected && (
-                  <div className={styles.stats}>
-                    <div className={styles.stat}>
-                      <span className={styles.statLabel}>Connected:</span>
-                      <span className={styles.statValue}>
-                        {account.connectionTime ? new Date(account.connectionTime).toLocaleTimeString() : '-'}
-                      </span>
-                    </div>
-                    {account.buyingPower && (
-                      <div className={styles.stat}>
-                        <span className={styles.statLabel}>Buying Power:</span>
-                        <span className={styles.statValue}>${(account.buyingPower / 1000).toFixed(1)}K</span>
-                      </div>
-                    )}
-                    {account.equity && (
-                      <div className={styles.stat}>
-                        <span className={styles.statLabel}>Equity:</span>
-                        <span className={styles.statValue}>${(account.equity / 1000).toFixed(1)}K</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className={styles.actions}>
-                  {account.isConnected ? (
-                    <button
-                      className={`${styles.btn} ${styles.btnDanger}`}
-                      onClick={() => handleDisconnect(account)}
-                      disabled={loading}
-                    >
-                      {loading ? '⊗ Disconnecting...' : '⊗ Disconnect'}
-                    </button>
-                  ) : (
-                    <button
-                      className={`${styles.btn} ${styles.btnSuccess}`}
-                      onClick={() => handleConnect(account)}
-                      disabled={loading}
-                    >
-                      {loading ? '🔄 Connecting...' : '🔗 Connect'}
-                    </button>
-                  )}
-                  <button
-                    className={`${styles.btn} ${styles.btnSecondary}`}
-                    onClick={() => handleTestConnection(account)}
-                    disabled={testingConnection || account.isConnected}
-                  >
-                    {testingConnection ? '🔄 Testing...' : '🧪 Test'}
-                  </button>
-                  <button
-                    className={`${styles.btn} ${styles.btnSecondary}`}
-                    onClick={() => openEditModal(account)}
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    className={`${styles.btn} ${styles.btnDanger}`}
-                    onClick={() => handleDeleteAccount(account.id)}
-                  >
-                    🗑️ Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Connection Health Section */}
-        <div className={`${styles.healthSection} glass-light`}>
-          <h2 className={styles.sectionTitle}>💚 Connection Health</h2>
-
-          <div className={styles.healthMetrics}>
-            <div className={styles.metric}>
-              <div className={styles.metricLabel}>Status</div>
-              <div className={`${styles.metricValue} ${connectionStatus.isConnected ? styles.healthy : styles.unhealthy}`}>
-                {connectionStatus.isConnected ? '🟢 Healthy' : '🔴 Not Connected'}
-              </div>
-            </div>
-            <div className={styles.metric}>
-              <div className={styles.metricLabel}>Latency</div>
-              <div className={styles.metricValue}>
-                {connectionStatus.latency?.toFixed(0) || '0'}ms
-              </div>
-            </div>
-            <div className={styles.metric}>
-              <div className={styles.metricLabel}>Last Check</div>
-              <div className={styles.metricValue}>
-                {connectionStatus.lastChecked
-                  ? new Date(connectionStatus.lastChecked).toLocaleTimeString()
-                  : '-'}
-              </div>
-            </div>
-            <div className={styles.metric}>
-              <div className={styles.metricLabel}>Uptime</div>
-              <div className={styles.metricValue}>
-                {connectionStatus.isConnected ? '99.5%' : '0%'}
-              </div>
-            </div>
-          </div>
-
-          {/* System Info */}
-          <div className={styles.systemInfo}>
-            <h3 className={styles.infoTitle}>System Information</h3>
-            <div className={styles.infoGrid}>
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>API Version:</span>
-                <span className={styles.infoValue}>v1.0</span>
-              </div>
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Backend URL:</span>
-                <span className={styles.infoValue} style={{ fontSize: '11px' }}>{API_URL}</span>
-              </div>
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Connection Mode:</span>
-                <span className={styles.infoValue}>Real-time</span>
-              </div>
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Update Interval:</span>
-                <span className={styles.infoValue}>5s</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Connection History */}
-      <div className={`${styles.historySection} glass-light`}>
-        <h2 className={styles.sectionTitle}>📝 Connection History</h2>
-
-        {connectionHistory.length > 0 ? (
-          <div className={styles.historyList}>
-            {connectionHistory.map(entry => (
-              <div key={entry.id} className={`${styles.historyEntry} ${styles[entry.type]}`}>
-                <div className={styles.historyIcon}>
-                  {entry.type === 'success' ? '✓' : entry.type === 'error' ? '✗' : entry.type === 'warning' ? '⚠' : 'ℹ'}
-                </div>
-                <div className={styles.historyContent}>
-                  <p className={styles.historyMessage}>{entry.message}</p>
-                  <span className={styles.historyTime}>
-                    {new Date(entry.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className={styles.emptyState}>
-            No connection history yet. Try connecting to an account!
+        {connectionStatus.connected && (
+          <div style={{ fontSize: '0.9rem' }}>
+            <div>Account: <strong>{connectionStatus.account_name}</strong></div>
+            <div>Type: <strong>{connectionStatus.account_type?.toUpperCase()}</strong></div>
+            <div>Equity: <strong>${connectionStatus.equity?.toLocaleString()}</strong></div>
+            <div>Buying Power: <strong>${connectionStatus.buying_power?.toLocaleString()}</strong></div>
+            <button
+              onClick={handleDisconnect}
+              disabled={loading}
+              style={{
+                marginTop: '1rem',
+                padding: '0.5rem 1rem',
+                background: 'white',
+                color: '#ef4444',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              {loading ? 'Disconnecting...' : 'Disconnect'}
+            </button>
           </div>
         )}
       </div>
 
-      {/* Add/Edit Account Modal */}
-      {showAddModal && (
-        <div className={styles.modal}>
-          <div className={styles.modalContent}>
-            <div className={styles.modalHeader}>
-              <h3>{editingAccount ? 'Edit Account' : 'Add New Account'}</h3>
+      {!connectionStatus.connected && (
+        <>
+          {/* Account Type Selector */}
+          <div style={{ marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Step 1: Select Account Type</h2>
+            <div style={{ display: 'flex', gap: '1rem' }}>
               <button
-                className={styles.closeButton}
-                onClick={() => {
-                  setShowAddModal(false)
-                  resetForm()
+                onClick={() => setSelectedAccountType('demo')}
+                style={{
+                  padding: '1rem 2rem',
+                  background: selectedAccountType === 'demo' ? '#3b82f6' : '#e5e7eb',
+                  color: selectedAccountType === 'demo' ? 'white' : '#333',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '1rem'
                 }}
               >
-                ✕
+                🎯 Demo (Paper Trading)
               </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.formGroup}>
-                <label>Account Name</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., My Demo Account"
-                  className={styles.input}
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label>Account Type</label>
-                <select
-                  value={formData.accountType}
-                  onChange={(e) => setFormData({ ...formData, accountType: e.target.value as 'DEMO' | 'LIVE' })}
-                  className={styles.select}
-                >
-                  <option value="DEMO">Demo (Paper Trading)</option>
-                  <option value="LIVE">Live (Real Money)</option>
-                </select>
-              </div>
-
-              <div className={styles.formRow}>
-                <div className={styles.formGroup}>
-                  <label>Host</label>
-                  <input
-                    type="text"
-                    value={formData.host}
-                    onChange={(e) => setFormData({ ...formData, host: e.target.value })}
-                    placeholder="127.0.0.1"
-                    className={styles.input}
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Port</label>
-                  <input
-                    type="number"
-                    value={formData.port}
-                    onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) })}
-                    placeholder="7497"
-                    className={styles.input}
-                  />
-                </div>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label>Client ID</label>
-                <input
-                  type="number"
-                  value={formData.clientId}
-                  onChange={(e) => setFormData({ ...formData, clientId: parseInt(e.target.value) })}
-                  placeholder="1"
-                  className={styles.input}
-                />
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
               <button
-                className={styles.btnCancel}
-                onClick={() => {
-                  setShowAddModal(false)
-                  resetForm()
+                onClick={() => setSelectedAccountType('live')}
+                style={{
+                  padding: '1rem 2rem',
+                  background: selectedAccountType === 'live' ? '#ef4444' : '#e5e7eb',
+                  color: selectedAccountType === 'live' ? 'white' : '#333',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '1rem'
                 }}
               >
-                Cancel
-              </button>
-              <button
-                className={styles.btnAdd}
-                onClick={editingAccount ? handleUpdateAccount : handleAddAccount}
-              >
-                {editingAccount ? 'Update Account' : 'Add Account'}
+                💰 Live (Real Trading) ⚠️
               </button>
             </div>
           </div>
-        </div>
+
+          {/* Scan Accounts */}
+          <div style={{ marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Step 2: Scan for Accounts</h2>
+            <button
+              onClick={scanAccounts}
+              disabled={scanningAccounts}
+              style={{
+                padding: '1rem 2rem',
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: scanningAccounts ? 'wait' : 'pointer',
+                fontWeight: 'bold',
+                fontSize: '1rem'
+              }}
+            >
+              {scanningAccounts ? '🔍 Scanning...' : `🔍 Scan ${selectedAccountType.toUpperCase()} Accounts`}
+            </button>
+            <p style={{ color: '#666', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+              Make sure TWS/Gateway is running on port {selectedAccountType === 'demo' ? '7497' : '7496'}
+            </p>
+          </div>
+
+          {/* Available Accounts */}
+          {availableAccounts.length > 0 && (
+            <div>
+              <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
+                Step 3: Select Account to Connect ({availableAccounts.length} found)
+              </h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1rem' }}>
+                {availableAccounts.map((account) => (
+                  <div
+                    key={account.account_name}
+                    style={{
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '1.5rem',
+                      background: 'white'
+                    }}
+                  >
+                    <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+                      {account.account_pattern === 'DU' ? '🎯' : '💰'} {account.account_name}
+                    </div>
+                    
+                    {account.error ? (
+                      <div style={{ color: '#ef4444', marginBottom: '1rem' }}>
+                        Error: {account.error}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1rem' }}>
+                        <div><strong>Type:</strong> {account.account_type.toUpperCase()}</div>
+                        <div><strong>Pattern:</strong> {account.account_pattern}</div>
+                        {account.equity !== undefined && (
+                          <>
+                            <div><strong>Equity:</strong> ${account.equity.toLocaleString()}</div>
+                            <div><strong>Cash:</strong> ${account.cash?.toLocaleString()}</div>
+                            <div><strong>Buying Power:</strong> ${account.buying_power?.toLocaleString()}</div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => handleConnect(account)}
+                      disabled={loading || !!account.error}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        background: account.error ? '#9ca3af' : '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: account.error || loading ? 'not-allowed' : 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {loading ? 'Connecting...' : 'Connect to this Account'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
+
+      {/* Connection History */}
+      <div style={{ marginTop: '2rem' }}>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Connection History</h2>
+        <div style={{ 
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          background: 'white',
+          maxHeight: '300px',
+          overflowY: 'auto'
+        }}>
+          {connectionHistory.length > 0 ? (
+            connectionHistory.map((entry) => (
+              <div
+                key={entry.id}
+                style={{
+                  padding: '1rem',
+                  borderBottom: '1px solid #e5e7eb',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>
+                    {entry.type === 'success' ? '✅' : entry.type === 'error' ? '❌' : entry.type === 'warning' ? '⚠️' : 'ℹ️'}
+                  </span>
+                  <span>{entry.message}</span>
+                </div>
+                <span style={{ color: '#666', fontSize: '0.8rem' }}>
+                  {new Date(entry.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
+              No connection history yet
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

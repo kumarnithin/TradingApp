@@ -119,3 +119,152 @@ class IBConnection(Base):
     last_connected = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+"""
+Alert Database Models - ADD TO YOUR EXISTING models.py
+Copy these tables to your existing app/database/models.py file
+"""
+
+# ============ ADD THESE IMPORTS TO THE TOP ============
+# (Add to existing imports in your models.py)
+
+from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, Text, Boolean, Enum as SQLEnum
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from datetime import datetime
+import enum
+import uuid
+
+# ============ ADD THESE ENUMS ============
+# (Add after your existing enums)
+
+class ActionEnum(str, enum.Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+    EXIT = "EXIT"
+
+class OrderTypeEnum(str, enum.Enum):
+    MARKET = "MKT"
+    LIMIT = "LMT"
+    STOP = "STOP"
+    STOP_LIMIT = "STOP_LIMIT"
+
+class AlertStatusEnum(str, enum.Enum):
+    PENDING = "PENDING"
+    SUBMITTED = "SUBMITTED"
+    FILLED = "FILLED"
+    PARTIALLY_FILLED = "PARTIALLY_FILLED"
+    CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
+    ERROR = "ERROR"
+    EXPIRED = "EXPIRED"
+
+# ============ ADD THESE MODELS ============
+# (Add after your existing models)
+
+class Alert(Base):
+    """Store TradingView webhook alerts"""
+    __tablename__ = "alerts"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    alert_id = Column(String, unique=True, nullable=True)
+    
+    # Signal Details
+    symbol = Column(String, nullable=False)
+    action = Column(String, nullable=False)  # BUY, SELL, EXIT
+    quantity = Column(Integer, nullable=False)
+    order_type = Column(String, default="MKT")
+    limit_price = Column(Float, nullable=True)
+    contract_type = Column(String, default="stock")
+    
+    # Risk Management
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
+    
+    # Strategy Information
+    strategy = Column(String, nullable=True)
+    strategy_id = Column(String, nullable=True)
+    timeframe = Column(String, nullable=True)
+    signal_strength = Column(Float, nullable=True)
+    
+    # Status & Execution
+    status = Column(String, default="PENDING")
+    error_message = Column(Text, nullable=True)
+    retry_count = Column(Integer, default=0)
+    
+    # IB Order Details
+    order_id = Column(Integer, nullable=True)
+    execution_price = Column(Float, nullable=True)
+    filled_quantity = Column(Integer, default=0)
+    average_fill_price = Column(Float, nullable=True)
+    
+    # Metadata
+    raw_payload = Column(Text, nullable=True)
+    comment = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    submitted_at = Column(DateTime, nullable=True)
+    filled_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Performance
+    profit_loss = Column(Float, nullable=True)
+    profit_loss_percent = Column(Float, nullable=True)
+    
+    def __repr__(self):
+        return f"<Alert {self.id}: {self.action} {self.quantity} {self.symbol}>"
+
+
+class ExecutionLog(Base):
+    """Detailed execution history"""
+    __tablename__ = "execution_logs"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    alert_id = Column(String, nullable=False)
+    order_id = Column(Integer, nullable=False)
+    execution_price = Column(Float, nullable=False)
+    filled_qty = Column(Integer, nullable=False)
+    fill_time = Column(DateTime, default=datetime.utcnow)
+    status = Column(String)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<ExecutionLog alert_id={self.alert_id}, order_id={self.order_id}>"
+
+
+class StrategyPerformance(Base):
+    """Performance metrics per strategy"""
+    __tablename__ = "strategy_performance"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    strategy_id = Column(String, unique=True, nullable=False)
+    strategy_name = Column(String, nullable=False)
+    
+    total_signals = Column(Integer, default=0)
+    executed_signals = Column(Integer, default=0)
+    filled_signals = Column(Integer, default=0)
+    failed_signals = Column(Integer, default=0)
+    
+    winning_trades = Column(Integer, default=0)
+    losing_trades = Column(Integer, default=0)
+    break_even_trades = Column(Integer, default=0)
+    
+    win_rate = Column(Float, nullable=True)
+    profit_factor = Column(Float, nullable=True)
+    avg_profit = Column(Float, nullable=True)
+    avg_loss = Column(Float, nullable=True)
+    total_profit_loss = Column(Float, default=0)
+    
+    sharpe_ratio = Column(Float, nullable=True)
+    max_drawdown = Column(Float, nullable=True)
+    risk_reward_ratio = Column(Float, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<StrategyPerformance {self.strategy_name}>"
+
+
+

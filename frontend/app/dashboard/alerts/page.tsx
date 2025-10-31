@@ -2,483 +2,457 @@
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import styles from './alerts.module.css'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface Alert {
   id: string
-  type: 'PRICE' | 'TRADE' | 'ACCOUNT' | 'STRATEGY'
-  title: string
-  description: string
-  condition: string
-  value: string
-  symbol?: string
-  enabled: boolean
-  channels: string[] // 'in_app', 'email', 'sound'
-  createdAt: string
-  lastTriggered?: string
-  triggerCount: number
+  symbol: string
+  action: string
+  quantity: number
+  status: string
+  strategy?: string
+  created_at: string
+  filled_at?: string
+  profit_loss?: number
 }
 
-interface AlertHistory {
-  id: string
-  alertId: string
-  title: string
-  message: string
-  severity: 'INFO' | 'WARNING' | 'CRITICAL'
-  triggeredAt: string
-  read: boolean
+interface AlertStats {
+  total_alerts: number
+  filled: number
+  pending: number
+  failed: number
+  success_rate: number
 }
 
-const ALERT_TYPES = [
-  { value: 'PRICE', label: 'Price Alert', icon: '💰', color: '#8AB4F8' },
-  { value: 'TRADE', label: 'Trade Alert', icon: '📊', color: '#22c55e' },
-  { value: 'ACCOUNT', label: 'Account Alert', icon: '⚠️', color: '#f97316' },
-  { value: 'STRATEGY', label: 'Strategy Alert', icon: '🎯', color: '#a855f7' }
-]
-
-const PRICE_CONDITIONS = [
-  { value: 'above', label: 'Price >= (Above)' },
-  { value: 'below', label: 'Price <= (Below)' },
-  { value: 'change', label: 'Price Change %' }
-]
+interface StrategyStats {
+  strategy: string
+  total_signals: number
+  filled: number
+  success_rate: number
+  win_rate: number
+  total_profit: number
+}
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
-  const [alertHistory, setAlertHistory] = useState<AlertHistory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null)
-  const [unreadCount, setUnreadCount] = useState(0)
-
-  // Form state
-  const [formData, setFormData] = useState({
-    type: 'PRICE',
-    title: '',
-    description: '',
+  const [stats, setStats] = useState<AlertStats | null>(null)
+  const [strategyStats, setStrategyStats] = useState<StrategyStats[]>([])
+  const [loading, setLoading] = useState(false)
+  
+  // Filters
+  const [filters, setFilters] = useState({
     symbol: '',
-    condition: 'above',
-    value: '',
-    channels: ['in_app'] as string[]
+    strategy: '',
+    status: 'all',
+    days: 7
   })
 
   useEffect(() => {
-    fetchAlerts()
-    fetchAlertHistory()
-    // Setup real-time polling for alerts
+    loadAlerts()
+    loadStats()
+    loadStrategyStats()
+    
     const interval = setInterval(() => {
-      fetchAlertHistory()
-    }, 5000)
+      loadAlerts()
+      loadStats()
+    }, 10000) // Refresh every 10 seconds
+    
     return () => clearInterval(interval)
-  }, [])
+  }, [filters])
 
-  const fetchAlerts = async () => {
+  const loadAlerts = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/v1/alerts`)
-      setAlerts(response.data)
-      setLoading(false)
+      const params: any = { days: filters.days }
+      if (filters.symbol) params.symbol = filters.symbol
+      if (filters.strategy) params.strategy = filters.strategy
+      if (filters.status !== 'all') params.status = filters.status
+
+      const response = await axios.get(`${API_URL}/api/v1/alerts/list`, { params })
+      if (response.data) {
+        setAlerts(response.data)
+      }
     } catch (error) {
-      console.error('Error fetching alerts:', error)
-      setLoading(false)
+      console.error('Error loading alerts:', error)
     }
   }
 
-  const fetchAlertHistory = async () => {
+  const loadStats = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/v1/alerts/history?limit=50`)
-      setAlertHistory(response.data)
-      const unread = response.data.filter((h: AlertHistory) => !h.read).length
-      setUnreadCount(unread)
+      const response = await axios.get(
+        `${API_URL}/api/v1/alerts/stats/overview?days=${filters.days}`
+      )
+      setStats(response.data)
     } catch (error) {
-      console.error('Error fetching alert history:', error)
+      console.error('Error loading stats:', error)
     }
   }
 
-  const handleCreateAlert = async () => {
-    if (!formData.title || !formData.value) {
-      alert('Please fill in all required fields')
-      return
-    }
-
+  const loadStrategyStats = async () => {
     try {
-      await axios.post(`${API_URL}/api/v1/alerts`, formData)
-      setFormData({
-        type: 'PRICE',
-        title: '',
-        description: '',
-        symbol: '',
-        condition: 'above',
-        value: '',
-        channels: ['in_app']
+      const response = await axios.get(
+        `${API_URL}/api/v1/alerts/stats/by-strategy?days=${filters.days}`
+      )
+      setStrategyStats(response.data.strategies || [])
+    } catch (error) {
+      console.error('Error loading strategy stats:', error)
+    }
+  }
+
+  const exportAlerts = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/v1/alerts/bulk/export`, {
+        params: { symbol: filters.symbol, strategy: filters.strategy, days: filters.days }
       })
-      setShowCreateModal(false)
-      fetchAlerts()
-      alert('Alert created successfully!')
+      
+      // Download as JSON
+      const dataStr = JSON.stringify(response.data.data, null, 2)
+      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `alerts_export_${new Date().toISOString()}.json`
+      link.click()
     } catch (error) {
-      console.error('Error creating alert:', error)
-      alert('Failed to create alert')
+      console.error('Error exporting alerts:', error)
     }
   }
 
-  const handleToggleAlert = async (alertId: string, enabled: boolean) => {
-    try {
-      await axios.patch(`${API_URL}/api/v1/alerts/${alertId}`, { enabled: !enabled })
-      fetchAlerts()
-    } catch (error) {
-      console.error('Error toggling alert:', error)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'FILLED': return '#10b981'
+      case 'PENDING': return '#f59e0b'
+      case 'REJECTED': return '#ef4444'
+      case 'ERROR': return '#ef4444'
+      default: return '#6b7280'
     }
   }
 
-  const handleDeleteAlert = async (alertId: string) => {
-    if (!confirm('Are you sure you want to delete this alert?')) return
-
-    try {
-      await axios.delete(`${API_URL}/api/v1/alerts/${alertId}`)
-      fetchAlerts()
-      alert('Alert deleted successfully!')
-    } catch (error) {
-      console.error('Error deleting alert:', error)
-    }
+  const getActionColor = (action: string) => {
+    return action === 'BUY' ? '#10b981' : '#ef4444'
   }
 
-  const handleMarkAsRead = async (historyId: string) => {
-    try {
-      await axios.patch(`${API_URL}/api/v1/alerts/history/${historyId}`, { read: true })
-      fetchAlertHistory()
-    } catch (error) {
-      console.error('Error marking as read:', error)
-    }
-  }
-
-  const activeAlerts = alerts.filter(a => a.enabled).length
-  const criticalAlerts = alertHistory.filter(h => h.severity === 'CRITICAL' && !h.read).length
-
-  if (loading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner}></div>
-        <p>Loading alerts...</p>
-      </div>
-    )
+  const getProfitColor = (profit: number | undefined) => {
+    if (!profit) return '#6b7280'
+    return profit > 0 ? '#10b981' : '#ef4444'
   }
 
   return (
-    <div className={styles.alertsPage}>
+    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
-      <div className={styles.pageHeader}>
-        <div>
-          <h1 className={styles.pageTitle}>🔔 Alert Management</h1>
-          <p className={styles.pageSubtitle}>Create and monitor trading alerts</p>
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+          📊 Alert Database Dashboard
+        </h1>
+        <p style={{ color: '#666' }}>Track all TradingView signals with persistent database storage</p>
+      </div>
+
+      {/* Stats Cards */}
+      {stats && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '1rem',
+          marginBottom: '2rem'
+        }}>
+          <div style={{
+            background: '#f3f4f6',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb'
+          }}>
+            <div style={{ fontSize: '0.9rem', color: '#666' }}>Total Alerts</div>
+            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
+              {stats.total_alerts}
+            </div>
+          </div>
+
+          <div style={{
+            background: '#dbeafe',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #93c5fd'
+          }}>
+            <div style={{ fontSize: '0.9rem', color: '#1e40af' }}>Filled</div>
+            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#1e40af' }}>
+              {stats.filled}
+            </div>
+          </div>
+
+          <div style={{
+            background: '#fef3c7',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #fcd34d'
+          }}>
+            <div style={{ fontSize: '0.9rem', color: '#92400e' }}>Pending</div>
+            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#92400e' }}>
+              {stats.pending}
+            </div>
+          </div>
+
+          <div style={{
+            background: '#fee2e2',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #fca5a5'
+          }}>
+            <div style={{ fontSize: '0.9rem', color: '#7f1d1d' }}>Failed</div>
+            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#7f1d1d' }}>
+              {stats.failed}
+            </div>
+          </div>
+
+          <div style={{
+            background: '#d1fae5',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #6ee7b7'
+          }}>
+            <div style={{ fontSize: '0.9rem', color: '#065f46' }}>Success Rate</div>
+            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#065f46' }}>
+              {stats.success_rate.toFixed(1)}%
+            </div>
+          </div>
         </div>
-        <button className={styles.createButton} onClick={() => setShowCreateModal(true)}>
-          + Create Alert
+      )}
+
+      {/* Strategy Performance */}
+      {strategyStats.length > 0 && (
+        <div style={{
+          background: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          padding: '1.5rem',
+          marginBottom: '2rem'
+        }}>
+          <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 'bold' }}>
+            📈 Strategy Performance
+          </h2>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ textAlign: 'left', padding: '1rem' }}>Strategy</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Total Signals</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Filled</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Success %</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Win Rate %</th>
+                  <th style={{ textAlign: 'right', padding: '1rem' }}>Total Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {strategyStats.map((s) => (
+                  <tr key={s.strategy} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>{s.strategy}</td>
+                    <td style={{ textAlign: 'center', padding: '1rem' }}>{s.total_signals}</td>
+                    <td style={{ textAlign: 'center', padding: '1rem' }}>{s.filled}</td>
+                    <td style={{ textAlign: 'center', padding: '1rem' }}>
+                      {s.success_rate.toFixed(1)}%
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '1rem' }}>
+                      <span style={{ color: s.win_rate > 50 ? '#10b981' : '#ef4444' }}>
+                        {s.win_rate.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td style={{
+                      textAlign: 'right',
+                      padding: '1rem',
+                      color: getProfitColor(s.total_profit),
+                      fontWeight: 'bold'
+                    }}>
+                      ${s.total_profit.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{
+        background: 'white',
+        border: '1px solid #e5e7eb',
+        borderRadius: '8px',
+        padding: '1.5rem',
+        marginBottom: '2rem'
+      }}>
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', fontWeight: 'bold' }}>🔍 Filters</h2>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '1rem'
+        }}>
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Symbol
+            </label>
+            <input
+              type="text"
+              value={filters.symbol}
+              onChange={(e) => setFilters({ ...filters, symbol: e.target.value })}
+              placeholder="e.g., AAPL"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Strategy
+            </label>
+            <input
+              type="text"
+              value={filters.strategy}
+              onChange={(e) => setFilters({ ...filters, strategy: e.target.value })}
+              placeholder="e.g., RSI"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Status
+            </label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            >
+              <option value="all">All</option>
+              <option value="FILLED">Filled</option>
+              <option value="PENDING">Pending</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="ERROR">Error</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Period (Days)
+            </label>
+            <input
+              type="number"
+              value={filters.days}
+              onChange={(e) => setFilters({ ...filters, days: parseInt(e.target.value) })}
+              min="1"
+              max="365"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={exportAlerts}
+          style={{
+            marginTop: '1rem',
+            padding: '0.75rem 1.5rem',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontWeight: 'bold',
+            cursor: 'pointer'
+          }}
+        >
+          📥 Export as JSON
         </button>
       </div>
 
-      {/* Overview Cards */}
-      <div className={styles.overviewGrid}>
-        <div className={`${styles.overviewCard} glass-light`}>
-          <div className={styles.cardValue}>{alerts.length}</div>
-          <div className={styles.cardLabel}>Total Alerts</div>
-        </div>
-        <div className={`${styles.overviewCard} glass-light`}>
-          <div className={styles.cardValue}>{activeAlerts}</div>
-          <div className={styles.cardLabel}>Active</div>
-        </div>
-        <div className={`${styles.overviewCard} glass-light`}>
-          <div className={styles.cardValue}>{unreadCount}</div>
-          <div className={styles.cardLabel}>Unread Notifications</div>
-        </div>
-        <div className={`${styles.overviewCard} glass-light`}>
-          <div className={styles.cardValue}>{criticalAlerts}</div>
-          <div className={styles.cardLabel}>Critical Alerts</div>
-        </div>
-      </div>
-
-      {/* Create Alert Modal */}
-      {showCreateModal && (
-        <div className={styles.modal}>
-          <div className={styles.modalContent}>
-            <div className={styles.modalHeader}>
-              <h2>Create New Alert</h2>
-              <button className={styles.closeButton} onClick={() => setShowCreateModal(false)}>✕</button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.formGroup}>
-                <label>Alert Type</label>
-                <div className={styles.typeGrid}>
-                  {ALERT_TYPES.map(type => (
-                    <button
-                      key={type.value}
-                      className={`${styles.typeButton} ${formData.type === type.value ? styles.selected : ''}`}
-                      onClick={() => setFormData({...formData, type: type.value as any})}
-                    >
-                      <span>{type.icon}</span>
-                      <span>{type.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label>Alert Title *</label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({...formData, title: e.target.value})}
-                  placeholder="e.g., AAPL Price Alert"
-                  className={styles.input}
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label>Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  placeholder="Optional description"
-                  className={styles.textarea}
-                />
-              </div>
-
-              {formData.type === 'PRICE' && (
-                <>
-                  <div className={styles.formGroup}>
-                    <label>Symbol *</label>
-                    <input
-                      type="text"
-                      value={formData.symbol}
-                      onChange={(e) => setFormData({...formData, symbol: e.target.value.toUpperCase()})}
-                      placeholder="e.g., AAPL"
-                      className={styles.input}
-                    />
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label>Condition</label>
-                    <select
-                      value={formData.condition}
-                      onChange={(e) => setFormData({...formData, condition: e.target.value})}
-                      className={styles.select}
-                    >
-                      {PRICE_CONDITIONS.map(c => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label>Target Value *</label>
-                    <input
-                      type="number"
-                      value={formData.value}
-                      onChange={(e) => setFormData({...formData, value: e.target.value})}
-                      placeholder="e.g., 150.50"
-                      step="0.01"
-                      className={styles.input}
-                    />
-                  </div>
-                </>
-              )}
-
-              {formData.type === 'TRADE' && (
-                <div className={styles.formGroup}>
-                  <label>Trigger Condition *</label>
-                  <select
-                    value={formData.value}
-                    onChange={(e) => setFormData({...formData, value: e.target.value})}
-                    className={styles.select}
-                  >
-                    <option value="">Select...</option>
-                    <option value="signal_received">New Signal Received</option>
-                    <option value="trade_executed">Trade Executed</option>
-                    <option value="take_profit">Take Profit Hit</option>
-                    <option value="stop_loss">Stop Loss Hit</option>
-                  </select>
-                </div>
-              )}
-
-              {formData.type === 'ACCOUNT' && (
-                <div className={styles.formGroup}>
-                  <label>Alert Condition *</label>
-                  <select
-                    value={formData.value}
-                    onChange={(e) => setFormData({...formData, value: e.target.value})}
-                    className={styles.select}
-                  >
-                    <option value="">Select...</option>
-                    <option value="daily_loss">Daily Loss Exceeded</option>
-                    <option value="margin_warning">Margin Usage High</option>
-                    <option value="connection_lost">Connection Lost</option>
-                    <option value="max_dd">Max Drawdown Exceeded</option>
-                  </select>
-                </div>
-              )}
-
-              <div className={styles.formGroup}>
-                <label>Notification Channels</label>
-                <div className={styles.channelCheckboxes}>
-                  {['in_app', 'email', 'sound'].map(channel => (
-                    <label key={channel} className={styles.checkbox}>
-                      <input
-                        type="checkbox"
-                        checked={formData.channels.includes(channel)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setFormData({
-                              ...formData,
-                              channels: [...formData.channels, channel]
-                            })
-                          } else {
-                            setFormData({
-                              ...formData,
-                              channels: formData.channels.filter(c => c !== channel)
-                            })
-                          }
-                        }}
-                      />
-                      <span>
-                        {channel === 'in_app' && '🌐 In-App'}
-                        {channel === 'email' && '📧 Email'}
-                        {channel === 'sound' && '🔊 Sound'}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button className={styles.btnCancel} onClick={() => setShowCreateModal(false)}>
-                Cancel
-              </button>
-              <button className={styles.btnCreate} onClick={handleCreateAlert}>
-                Create Alert
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Active Alerts */}
-      <div className={`${styles.section} glass-light`}>
-        <h2 className={styles.sectionTitle}>📍 Active Alerts</h2>
-        {alerts.filter(a => a.enabled).length > 0 ? (
-          <div className={styles.alertsList}>
-            {alerts.filter(a => a.enabled).map(alert => (
-              <div key={alert.id} className={styles.alertItem}>
-                <div className={styles.alertLeft}>
-                  <div className={styles.alertTypeIcon}>
-                    {ALERT_TYPES.find(t => t.value === alert.type)?.icon}
-                  </div>
-                  <div className={styles.alertInfo}>
-                    <h4 className={styles.alertTitle}>{alert.title}</h4>
-                    <p className={styles.alertDesc}>{alert.description || 'No description'}</p>
-                    <p className={styles.alertCondition}>
-                      {alert.condition} | Triggered {alert.triggerCount} times
-                    </p>
-                  </div>
-                </div>
-                <div className={styles.alertRight}>
-                  <div className={styles.alertChannels}>
-                    {alert.channels.map(c => (
-                      <span key={c} className={styles.channelBadge}>
-                        {c === 'in_app' && '🌐'}
-                        {c === 'email' && '📧'}
-                        {c === 'sound' && '🔊'}
-                      </span>
-                    ))}
-                  </div>
-                  <div className={styles.alertActions}>
-                    <button
-                      className={styles.btnToggle}
-                      onClick={() => handleToggleAlert(alert.id, alert.enabled)}
-                    >
-                      ⏸ Pause
-                    </button>
-                    <button
-                      className={styles.btnDelete}
-                      onClick={() => handleDeleteAlert(alert.id)}
-                    >
-                      🗑️ Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+      {/* Alerts Table */}
+      <div style={{
+        background: 'white',
+        border: '1px solid #e5e7eb',
+        borderRadius: '8px',
+        padding: '1.5rem'
+      }}>
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', fontWeight: 'bold' }}>
+          📋 Alert History ({alerts.length})
+        </h2>
+        
+        {alerts.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ textAlign: 'left', padding: '1rem' }}>Time</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Symbol</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Action</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Qty</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Strategy</th>
+                  <th style={{ textAlign: 'center', padding: '1rem' }}>Status</th>
+                  <th style={{ textAlign: 'right', padding: '1rem' }}>P&L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alerts.map((alert) => (
+                  <tr key={alert.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '1rem', fontSize: '0.9rem' }}>
+                      {new Date(alert.created_at).toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '1rem', fontWeight: 'bold' }}>
+                      {alert.symbol}
+                    </td>
+                    <td style={{
+                      textAlign: 'center',
+                      padding: '1rem',
+                      color: getActionColor(alert.action),
+                      fontWeight: 'bold'
+                    }}>
+                      {alert.action}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '1rem' }}>
+                      {alert.quantity}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '1rem', fontSize: '0.9rem', color: '#666' }}>
+                      {alert.strategy || '-'}
+                    </td>
+                    <td style={{
+                      textAlign: 'center',
+                      padding: '1rem',
+                      color: getStatusColor(alert.status),
+                      fontWeight: 'bold'
+                    }}>
+                      {alert.status}
+                    </td>
+                    <td style={{
+                      textAlign: 'right',
+                      padding: '1rem',
+                      color: getProfitColor(alert.profit_loss),
+                      fontWeight: 'bold'
+                    }}>
+                      {alert.profit_loss ? `$${alert.profit_loss.toFixed(2)}` : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
-          <p className={styles.emptyState}>No active alerts. Create one to get started!</p>
-        )}
-      </div>
-
-      {/* Inactive Alerts */}
-      {alerts.filter(a => !a.enabled).length > 0 && (
-        <div className={`${styles.section} glass-light`}>
-          <h2 className={styles.sectionTitle}>⏸️ Inactive Alerts</h2>
-          <div className={styles.alertsList}>
-            {alerts.filter(a => !a.enabled).map(alert => (
-              <div key={alert.id} className={`${styles.alertItem} ${styles.inactive}`}>
-                <div className={styles.alertLeft}>
-                  <div className={styles.alertTypeIcon}>
-                    {ALERT_TYPES.find(t => t.value === alert.type)?.icon}
-                  </div>
-                  <div className={styles.alertInfo}>
-                    <h4 className={styles.alertTitle}>{alert.title}</h4>
-                    <p className={styles.alertCondition}>{alert.condition}</p>
-                  </div>
-                </div>
-                <button
-                  className={styles.btnReactivate}
-                  onClick={() => handleToggleAlert(alert.id, alert.enabled)}
-                >
-                  ▶ Activate
-                </button>
-              </div>
-            ))}
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
+            No alerts found
           </div>
-        </div>
-      )}
-
-      {/* Alert History */}
-      <div className={`${styles.section} glass-light`}>
-        <h2 className={styles.sectionTitle}>📜 Alert History (Last 50)</h2>
-        {alertHistory.length > 0 ? (
-          <div className={styles.historyList}>
-            {alertHistory.map(history => (
-              <div
-                key={history.id}
-                className={`${styles.historyItem} ${!history.read ? styles.unread : ''}`}
-              >
-                <div className={styles.historyLeft}>
-                  <span className={`${styles.severityIcon} ${styles[`severity_${history.severity.toLowerCase()}`]}`}>
-                    {history.severity === 'CRITICAL' && '🚨'}
-                    {history.severity === 'WARNING' && '⚠️'}
-                    {history.severity === 'INFO' && 'ℹ️'}
-                  </span>
-                  <div>
-                    <h5 className={styles.historyTitle}>{history.title}</h5>
-                    <p className={styles.historyMessage}>{history.message}</p>
-                    <p className={styles.historyTime}>
-                      {new Date(history.triggeredAt).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-                {!history.read && (
-                  <button
-                    className={styles.btnMarkRead}
-                    onClick={() => handleMarkAsRead(history.id)}
-                  >
-                    ✓ Mark Read
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className={styles.emptyState}>No alert history yet</p>
         )}
       </div>
     </div>
