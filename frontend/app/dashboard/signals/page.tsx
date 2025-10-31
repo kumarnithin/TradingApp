@@ -2,281 +2,520 @@
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import styles from './signals.module.css'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-interface Signal {
+interface SignalConfig {
+  enabled: boolean
+  default_quantity: number
+  strategy_name: string
+  auto_execute: boolean
+  max_daily_trades: number
+  risk_per_trade: number
+  stop_loss_percent?: number
+  take_profit_percent?: number
+}
+
+interface SignalStatus {
+  connected_to_ib: boolean
+  auto_execute_enabled: boolean
+  signals_enabled: boolean
+  daily_trades: number
+  max_daily_trades: number
+  remaining_trades: number
+  account: {
+    name: string
+    type: string
+  }
+}
+
+interface SignalEvent {
   id: number
-  symbol: string
-  action: string
-  quantity: number
-  order_type: string
-  price: number | null
-  stop_loss: number | null
-  take_profit: number | null
-  strategy_id: string
-  status: string
-  received_at: string
-  processed_at: string | null
-  rejection_reason: string | null
+  type: string
+  message: string
+  timestamp: string
 }
 
 export default function SignalsPage() {
-  const [signals, setSignals] = useState<Signal[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState({
-    status: 'ALL',
-    action: 'ALL',
-    symbol: ''
+  const [config, setConfig] = useState<SignalConfig>({
+    enabled: true,
+    default_quantity: 10,
+    strategy_name: 'TradingView',
+    auto_execute: true,
+    max_daily_trades: 50,
+    risk_per_trade: 0.02
   })
+  const [status, setStatus] = useState<SignalStatus | null>(null)
+  const [history, setHistory] = useState<SignalEvent[]>([])
+  const [loading, setLoading] = useState(false)
+  const [webhookUrl, setWebhookUrl] = useState('')
 
   useEffect(() => {
-    fetchSignals()
-    const interval = setInterval(fetchSignals, 3000) // Update every 3 seconds
+    loadStatus()
+    loadConfig()
+    loadHistory()
+    const interval = setInterval(() => {
+      loadStatus()
+      loadHistory()
+    }, 5000)
     return () => clearInterval(interval)
   }, [])
 
-  const fetchSignals = async () => {
+  useEffect(() => {
+    // Generate webhook URL
+    const url = `${API_URL}/api/v1/signals/webhook`
+    setWebhookUrl(url)
+  }, [])
+
+  const loadStatus = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/v1/webhook/signals?limit=50`)
-      setSignals(response.data)
-      setLoading(false)
+      const response = await axios.get(`${API_URL}/api/v1/signals/status`)
+      if (response.data.status === 'success') {
+        setStatus(response.data.system)
+      }
     } catch (error) {
-      console.error('Error fetching signals:', error)
-      setLoading(false)
+      console.error('Error loading status:', error)
     }
   }
 
-  // Calculate statistics
-  const stats = {
-    total: signals.length,
-    executed: signals.filter(s => s.status === 'EXECUTED').length,
-    pending: signals.filter(s => s.status === 'PENDING').length,
-    rejected: signals.filter(s => s.status === 'REJECTED').length
+  const loadConfig = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/v1/signals/config`)
+      if (response.data.status === 'success') {
+        setConfig(response.data.config)
+      }
+    } catch (error) {
+      console.error('Error loading config:', error)
+    }
   }
 
-  // Filter signals
-  const filteredSignals = signals.filter(signal => {
-    if (filter.status !== 'ALL' && signal.status !== filter.status) return false
-    if (filter.action !== 'ALL' && signal.action !== filter.action) return false
-    if (filter.symbol && !signal.symbol.toLowerCase().includes(filter.symbol.toLowerCase())) return false
-    return true
-  })
+  const loadHistory = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/v1/signals/history`)
+      if (response.data.status === 'success') {
+        setHistory(response.data.history.reverse())
+      }
+    } catch (error) {
+      console.error('Error loading history:', error)
+    }
+  }
 
-  if (loading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner}></div>
-        <p>Loading signals...</p>
-      </div>
-    )
+  const updateConfig = async () => {
+    setLoading(true)
+    try {
+      const response = await axios.post(`${API_URL}/api/v1/signals/config`, config)
+      if (response.data.status === 'success') {
+        alert('✅ Configuration updated successfully!')
+        loadConfig()
+      }
+    } catch (error: any) {
+      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
+    }
+    setLoading(false)
+  }
+
+  const toggleAutoExecute = async () => {
+    setLoading(true)
+    try {
+      const response = await axios.post(`${API_URL}/api/v1/signals/config/toggle`)
+      if (response.data.status === 'success') {
+        loadStatus()
+        loadConfig()
+      }
+    } catch (error: any) {
+      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
+    }
+    setLoading(false)
+  }
+
+  const resetDailyCount = async () => {
+    if (!confirm('Reset daily trade count?')) return
+    setLoading(true)
+    try {
+      const response = await axios.post(`${API_URL}/api/v1/signals/config/reset-daily-count`)
+      if (response.data.status === 'success') {
+        loadStatus()
+      }
+    } catch (error: any) {
+      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
+    }
+    setLoading(false)
+  }
+
+  const testSignal = async () => {
+    setLoading(true)
+    try {
+      const response = await axios.post(`${API_URL}/api/v1/signals/test`)
+      if (response.data.status === 'success') {
+        alert('✅ Test signal sent!')
+        loadHistory()
+      }
+    } catch (error: any) {
+      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
+    }
+    setLoading(false)
+  }
+
+  const copyWebhookUrl = () => {
+    navigator.clipboard.writeText(webhookUrl)
+    alert('✅ Webhook URL copied to clipboard!')
   }
 
   return (
-    <div className={styles.signalsPage}>
+    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
-      <div className={styles.pageHeader}>
-        <div>
-          <h1 className={styles.pageTitle}>Signal Monitor</h1>
-          <p className={styles.pageSubtitle}>Real-time trading signals and execution tracking</p>
-        </div>
-        <div className={styles.liveIndicator}>
-          <div className={styles.liveDot}></div>
-          <span>Live</span>
-        </div>
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+          🤖 Auto Trading - TradingView Signals
+        </h1>
+        <p style={{ color: '#666' }}>Automatically execute trades from TradingView alerts</p>
       </div>
 
-      {/* Statistics Cards */}
-      <div className={styles.statsGrid}>
-        <div className={`${styles.statCard} glass-light`}>
-          <div className={styles.statIcon}>📊</div>
-          <div className={styles.statContent}>
-            <p className={styles.statLabel}>Total Signals</p>
-            <p className={styles.statValue}>{stats.total}</p>
+      {/* Status Card */}
+      {status && (
+        <div style={{
+          background: status.auto_execute_enabled ? '#10b981' : '#f97316',
+          color: 'white',
+          padding: '2rem',
+          borderRadius: '8px',
+          marginBottom: '2rem'
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '2rem' }}>
+            <div>
+              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>IB Connection</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                {status.connected_to_ib ? '🟢 Connected' : '🔴 Disconnected'}
+              </div>
+              <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                {status.account.name}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Auto Execute</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                {status.auto_execute_enabled ? '✅ ENABLED' : '❌ DISABLED'}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Daily Trades</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                {status.daily_trades} / {status.max_daily_trades}
+              </div>
+              <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                {status.remaining_trades} remaining
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+            <button
+              onClick={toggleAutoExecute}
+              disabled={loading}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: 'white',
+                color: status.auto_execute_enabled ? '#f97316' : '#10b981',
+                border: 'none',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              {status.auto_execute_enabled ? '⛔ Disable' : '✅ Enable'}
+            </button>
+
+            <button
+              onClick={resetDailyCount}
+              disabled={loading}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: '1px solid white',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Reset Count
+            </button>
+
+            <button
+              onClick={testSignal}
+              disabled={loading}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: '1px solid white',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              🧪 Test Signal
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Configuration */}
+      <div style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: '8px',
+        padding: '2rem',
+        background: 'white',
+        marginBottom: '2rem'
+      }}>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem' }}>⚙️ Configuration</h2>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Strategy Name
+            </label>
+            <input
+              type="text"
+              value={config.strategy_name}
+              onChange={(e) => setConfig({ ...config, strategy_name: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Default Quantity
+            </label>
+            <input
+              type="number"
+              value={config.default_quantity}
+              onChange={(e) => setConfig({ ...config, default_quantity: parseFloat(e.target.value) })}
+              min="0.1"
+              step="0.1"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Max Daily Trades
+            </label>
+            <input
+              type="number"
+              value={config.max_daily_trades}
+              onChange={(e) => setConfig({ ...config, max_daily_trades: parseInt(e.target.value) })}
+              min="1"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Risk Per Trade (%)
+            </label>
+            <input
+              type="number"
+              value={config.risk_per_trade * 100}
+              onChange={(e) => setConfig({ ...config, risk_per_trade: parseFloat(e.target.value) / 100 })}
+              min="0.1"
+              step="0.1"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Stop Loss (%)
+            </label>
+            <input
+              type="number"
+              value={config.stop_loss_percent || ''}
+              onChange={(e) => setConfig({ ...config, stop_loss_percent: e.target.value ? parseFloat(e.target.value) : undefined })}
+              min="0.1"
+              step="0.1"
+              placeholder="Optional"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+              Take Profit (%)
+            </label>
+            <input
+              type="number"
+              value={config.take_profit_percent || ''}
+              onChange={(e) => setConfig({ ...config, take_profit_percent: e.target.value ? parseFloat(e.target.value) : undefined })}
+              min="0.1"
+              step="0.1"
+              placeholder="Optional"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            />
           </div>
         </div>
 
-        <div className={`${styles.statCard} glass-light`}>
-          <div className={`${styles.statIcon} ${styles.iconGreen}`}>✓</div>
-          <div className={styles.statContent}>
-            <p className={styles.statLabel}>Executed</p>
-            <p className={styles.statValue}>{stats.executed}</p>
-          </div>
-        </div>
-
-        <div className={`${styles.statCard} glass-light`}>
-          <div className={`${styles.statIcon} ${styles.iconYellow}`}>⏳</div>
-          <div className={styles.statContent}>
-            <p className={styles.statLabel}>Pending</p>
-            <p className={styles.statValue}>{stats.pending}</p>
-          </div>
-        </div>
-
-        <div className={`${styles.statCard} glass-light`}>
-          <div className={`${styles.statIcon} ${styles.iconRed}`}>✗</div>
-          <div className={styles.statContent}>
-            <p className={styles.statLabel}>Rejected</p>
-            <p className={styles.statValue}>{stats.rejected}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className={`${styles.filtersBar} glass-light`}>
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Status</label>
-          <select 
-            className={styles.filterSelect}
-            value={filter.status}
-            onChange={(e) => setFilter({...filter, status: e.target.value})}
-          >
-            <option value="ALL">All Status</option>
-            <option value="EXECUTED">Executed</option>
-            <option value="PENDING">Pending</option>
-            <option value="REJECTED">Rejected</option>
-          </select>
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Action</label>
-          <select 
-            className={styles.filterSelect}
-            value={filter.action}
-            onChange={(e) => setFilter({...filter, action: e.target.value})}
-          >
-            <option value="ALL">All Actions</option>
-            <option value="BUY">Buy</option>
-            <option value="SELL">Sell</option>
-          </select>
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Symbol</label>
-          <input 
-            type="text"
-            placeholder="Search symbol..."
-            className={styles.filterInput}
-            value={filter.symbol}
-            onChange={(e) => setFilter({...filter, symbol: e.target.value})}
-          />
-        </div>
-
-        <button 
-          className={styles.resetButton}
-          onClick={() => setFilter({ status: 'ALL', action: 'ALL', symbol: '' })}
+        <button
+          onClick={updateConfig}
+          disabled={loading}
+          style={{
+            padding: '0.75rem 2rem',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontWeight: 'bold',
+            cursor: 'pointer'
+          }}
         >
-          Reset
+          {loading ? '⏳ Saving...' : '💾 Save Configuration'}
         </button>
       </div>
 
-      {/* Signals Table */}
-      <div className={`${styles.tableContainer} glass-light`}>
-        <div className={styles.tableHeader}>
-          <h2 className={styles.tableTitle}>Signal History</h2>
-          <span className={styles.tableBadge}>{filteredSignals.length} signals</span>
+      {/* Webhook Setup */}
+      <div style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: '8px',
+        padding: '2rem',
+        background: '#f9fafb',
+        marginBottom: '2rem'
+      }}>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>🔗 TradingView Webhook Setup</h2>
+
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '4px', marginBottom: '1rem' }}>
+          <p style={{ color: '#666', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+            Webhook URL:
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="text"
+              value={webhookUrl}
+              readOnly
+              style={{
+                flex: 1,
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                fontFamily: 'monospace',
+                fontSize: '0.875rem'
+              }}
+            />
+            <button
+              onClick={copyWebhookUrl}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              📋 Copy
+            </button>
+          </div>
         </div>
 
-        <div className={styles.tableWrapper}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Symbol</th>
-                <th>Action</th>
-                <th>Quantity</th>
-                <th>Price</th>
-                <th>Strategy</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSignals.length > 0 ? (
-                filteredSignals.map((signal) => (
-                  <tr key={signal.id} className={styles.tableRow}>
-                    <td className={styles.timeCell}>
-                      {new Date(signal.received_at).toLocaleTimeString()}
-                    </td>
-                    <td className={styles.symbolCell}>{signal.symbol}</td>
-                    <td>
-                      <span className={`${styles.actionBadge} ${signal.action === 'BUY' ? styles.badgeBuy : styles.badgeSell}`}>
-                        {signal.action}
-                      </span>
-                    </td>
-                    <td className={styles.quantityCell}>{signal.quantity}</td>
-                    <td className={styles.priceCell}>
-                      {signal.price ? `$${signal.price.toFixed(2)}` : '-'}
-                    </td>
-                    <td className={styles.strategyCell}>{signal.strategy_id}</td>
-                    <td>
-                      <span className={`${styles.statusBadge} ${
-                        signal.status === 'EXECUTED' ? styles.statusExecuted :
-                        signal.status === 'PENDING' ? styles.statusPending :
-                        styles.statusRejected
-                      }`}>
-                        {signal.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className={styles.emptyState}>
-                    No signals found matching your filters
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '4px' }}>
+          <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>Signal JSON Format:</p>
+          <pre style={{
+            background: '#1f2937',
+            color: '#10b981',
+            padding: '1rem',
+            borderRadius: '4px',
+            overflowX: 'auto',
+            fontSize: '0.85rem'
+          }}>
+{`{
+  "symbol": "AAPL",
+  "action": "BUY",
+  "contract_type": "stock",
+  "quantity": 10,
+  "order_type": "MKT",
+  "strategy": "My Strategy",
+  "timeframe": "1H",
+  "exchange": "NASDAQ"
+}`}
+          </pre>
         </div>
       </div>
 
-      {/* Strategy Performance */}
-      <div className={`${styles.performanceCard} glass-light`}>
-        <h2 className={styles.performanceTitle}>Strategy Performance</h2>
-        <div className={styles.performanceGrid}>
-          {getStrategyStats(signals).map((strategy, index) => (
-            <div key={index} className={styles.strategyItem}>
-              <div className={styles.strategyHeader}>
-                <span className={styles.strategyName}>{strategy.name}</span>
-                <span className={styles.strategyRate}>
-                  {strategy.successRate}% success
+      {/* Signal History */}
+      <div style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: '8px',
+        padding: '2rem',
+        background: 'white'
+      }}>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>📝 Signal History</h2>
+        <div style={{
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          maxHeight: '500px',
+          overflowY: 'auto'
+        }}>
+          {history.length > 0 ? (
+            history.map((event) => (
+              <div
+                key={event.id}
+                style={{
+                  padding: '1rem',
+                  borderBottom: '1px solid #e5e7eb',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>
+                    {event.type === 'success' ? '✅' : event.type === 'error' ? '❌' : event.type === 'warning' ? '⚠️' : event.type === 'info' ? 'ℹ️' : '📨'}
+                  </span>
+                  <span>{event.message}</span>
+                </div>
+                <span style={{ color: '#666', fontSize: '0.8rem' }}>
+                  {new Date(event.timestamp).toLocaleTimeString()}
                 </span>
               </div>
-              <div className={styles.progressBar}>
-                <div 
-                  className={styles.progressFill}
-                  style={{ width: `${strategy.successRate}%` }}
-                ></div>
-              </div>
-              <div className={styles.strategyStats}>
-                <span>{strategy.executed} executed</span>
-                <span>{strategy.rejected} rejected</span>
-              </div>
+            ))
+          ) : (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
+              No signals yet
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
   )
-}
-
-// Helper function to calculate strategy statistics
-function getStrategyStats(signals: Signal[]) {
-  const strategies = signals.reduce((acc, signal) => {
-    if (!acc[signal.strategy_id]) {
-      acc[signal.strategy_id] = { executed: 0, rejected: 0, total: 0 }
-    }
-    acc[signal.strategy_id].total++
-    if (signal.status === 'EXECUTED') acc[signal.strategy_id].executed++
-    if (signal.status === 'REJECTED') acc[signal.strategy_id].rejected++
-    return acc
-  }, {} as Record<string, { executed: number; rejected: number; total: number }>)
-
-  return Object.entries(strategies).map(([name, stats]) => ({
-    name,
-    executed: stats.executed,
-    rejected: stats.rejected,
-    successRate: stats.total > 0 ? Math.round((stats.executed / stats.total) * 100) : 0
-  }))
 }

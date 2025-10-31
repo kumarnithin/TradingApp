@@ -20,33 +20,18 @@ interface Order {
   timestamp: string
 }
 
-interface Position {
-  account: string
-  symbol: string
-  contract_type: string
-  quantity: number
-  avg_cost: number
-  market_price: number
-  market_value: number
-  unrealized_pnl: number
-  realized_pnl: number
-  timestamp: string
-}
-
-interface ConnectionStatus {
-  connected: boolean
-  account_type?: string
-  account_name?: string
-  account?: string
-  equity?: number
-  buying_power?: number
-  timestamp?: string
+interface TradeResult {
+  status: string
+  order_id?: number
+  symbol?: string
+  error?: string
+  message?: string
 }
 
 export default function TradePage() {
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({ connected: false })
+  const [connectionStatus, setConnectionStatus] = useState({ connected: false })
   const [orders, setOrders] = useState<Order[]>([])
-  const [positions, setPositions] = useState<Position[]>([])
+  const [positions, setPositions] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [tradeHistory, setTradeHistory] = useState<any[]>([])
 
@@ -136,9 +121,11 @@ export default function TradePage() {
       
       if (response.data.status === 'success') {
         addToHistory('success', `✅ Order placed! Order ID: ${response.data.order_id}`)
+        // Reset form
         setSymbol('AAPL')
         setQuantity('10')
         setLimitPrice('')
+        // Refresh orders
         refreshOrders()
         refreshPositions()
       } else {
@@ -227,7 +214,7 @@ export default function TradePage() {
           <span style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
             {connectionStatus.connected ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}
           </span>
-          {connectionStatus.connected && connectionStatus.account_name && (
+          {connectionStatus.connected && (
             <div style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
               Account: <strong>{connectionStatus.account_name}</strong>
             </div>
@@ -266,6 +253,7 @@ export default function TradePage() {
               value={contractType}
               onChange={(e) => {
                 setContractType(e.target.value)
+                // Auto-set defaults for each type
                 if (e.target.value === 'forex') setSymbol('EURUSD')
                 else if (e.target.value === 'crypto') setSymbol('BTC')
                 else if (e.target.value === 'future') setSymbol('ES')

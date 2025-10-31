@@ -1,10 +1,6 @@
 """
-CORRECTED main.py for your actual folder structure
-
-Your structure:
-- app/models.py (has Base, Alert classes)
-- app/database.py (has engine, SessionLocal)
-- NOT app/database/models.py
+Trading Automation Platform - Main API Server
+Full-stack trading automation with IB integration and TradingView signals
 """
 
 from fastapi import FastAPI
@@ -17,7 +13,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app instance
@@ -35,22 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ============ DATABASE INITIALIZATION ============
-
-@app.on_event("startup")
-async def init_database():
-    """Initialize database tables on startup"""
-    try:
-        # Import from app.database (NOT app.database.models)
-        from app.database import engine
-        from app.models import Base
-        
-        logger.info("💾 Initializing database tables...")
-        Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables created/verified successfully!")
-    except Exception as e:
-        logger.error(f"❌ Error initializing database: {e}")
 
 # ============ IMPORT ROUTERS ============
 
@@ -70,14 +49,6 @@ try:
 except Exception as e:
     logger.error(f"✗ Failed to load Signals router: {e}")
 
-# Alerts Router (Database Management)
-try:
-    from app.routes.api.v1.alerts import router as alerts_router
-    app.include_router(alerts_router, prefix="/api/v1")
-    logger.info("✓ Alerts router loaded")
-except Exception as e:
-    logger.warning(f"⚠️ Alerts router not found (optional): {e}")
-
 # Portfolio Router (if exists)
 try:
     from app.routes.api.v1.portfolio import router as portfolio_router
@@ -93,6 +64,14 @@ try:
     logger.info("✓ Orders router loaded")
 except Exception as e:
     logger.warning(f"Orders router not found (optional): {e}")
+
+# Signals Router (if separate alerts router exists)
+try:
+    from app.routes.api.v1.alerts import router as alerts_router
+    app.include_router(alerts_router, prefix="/api/v1")
+    logger.info("✓ Alerts router loaded")
+except Exception as e:
+    logger.warning(f"Alerts router not found (optional): {e}")
 
 # Strategies Router (if exists)
 try:
@@ -138,15 +117,6 @@ async def api_status():
     try:
         from app.services.ib_client import ib_client
         
-        # Check database connection
-        db_status = "unknown"
-        try:
-            from app.database import engine
-            with engine.connect() as connection:
-                db_status = "connected"
-        except Exception as e:
-            db_status = f"error: {str(e)}"
-        
         return {
             "status": "online",
             "timestamp": datetime.now().isoformat(),
@@ -155,9 +125,6 @@ async def api_status():
                     "available": True,
                     "connected": ib_client.is_connected(),
                     "account": ib_client.account_name or "Not connected"
-                },
-                "database": {
-                    "status": db_status
                 },
                 "api": "running"
             }
@@ -186,10 +153,7 @@ async def startup_event():
     logger.info("============================================================")
     logger.info("📊 API Documentation: http://localhost:8000/docs")
     logger.info("🔧 Alternative Docs: http://localhost:8000/redoc")
-    logger.info("❤️ Health Check: http://localhost:8000/health")
-    logger.info("💾 Database: Connected")
-    logger.info("📨 Signals: Ready to receive")
-    logger.info("📋 Alerts: Available at /api/v1/alerts/list")
+    logger.info("❤️  Health Check: http://localhost:8000/health")
     logger.info("============================================================")
 
 @app.on_event("shutdown")
@@ -214,6 +178,25 @@ async def global_exception_handler(request, exc):
         "status": "error",
         "error": str(exc),
         "timestamp": datetime.now().isoformat()
+    }
+
+# ============ DEBUG INFO ============
+
+@app.get("/api/v1/debug/routes")
+async def debug_routes():
+    """Debug endpoint - list all routes"""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            routes.append({
+                "path": route.path,
+                "methods": list(route.methods),
+                "name": getattr(route, 'name', 'unknown')
+            })
+    return {
+        "status": "success",
+        "total_routes": len(routes),
+        "routes": sorted(routes, key=lambda x: x['path'])
     }
 
 if __name__ == "__main__":

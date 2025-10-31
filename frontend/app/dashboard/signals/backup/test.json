@@ -1,0 +1,16 @@
+{
+  "symbol": "{{ticker}}",
+  "contract_type": "stock",
+  "action": "{{strategy.order.action}}",
+  "quantity": 1,
+  "order_type": "MKT",
+  "limit_price": null,
+  "stop_loss": null,
+  "take_profit": null,
+  "strategy": "{{strategy.name}}",
+  "strategy_id": "{{strategy.id}}",
+  "priority": "NORMAL",
+  "timeframe": "{{interval}}",
+  "comment": "{{strategy.position_size}}_{{close}}",
+  "exchange": null
+}

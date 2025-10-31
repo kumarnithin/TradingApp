@@ -1,7 +1,7 @@
 """
-IB Connection Router - FIXED VERSION
+IB Connection Router - REAL IB INTEGRATION (WITH ACCOUNT SELECTION)
 Handles Interactive Brokers operations with real connections
-Fixed: Multiple values for keyword argument error
+Supports: Stocks, Forex, Futures, Crypto, Options
 """
 
 from fastapi import APIRouter, HTTPException, status
@@ -12,9 +12,10 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
+# Create router
 router = APIRouter(prefix="/ib", tags=["IB Connection"])
 
-# Import IB client service with error handling
+# Import the real IB client service - with error handling
 ib_client = None
 try:
     from app.services.ib_client import ib_client as _ib_client
@@ -22,6 +23,7 @@ try:
     logger.info("✓ Real IB Client Service imported successfully")
 except ImportError as e:
     logger.error(f"✗ Failed to import IB Client Service: {e}")
+    logger.error("  Make sure ib_client.py is in app/services/ directory")
     ib_client = None
 except Exception as e:
     logger.error(f"✗ Error loading IB Client Service: {e}")
@@ -31,7 +33,21 @@ except Exception as e:
 
 @router.post("/get-accounts")
 async def get_available_accounts(data: dict):
-    """Get list of available accounts from TWS/Gateway"""
+    """
+    Get list of available accounts from TWS/Gateway
+    
+    Account name patterns:
+    - DUxxxxxx: Paper trading account (6 digits)
+    - Uxxxxxxx: Live trading account (7 digits)
+    
+    Parameters:
+    - account_type: "demo" or "live"
+    - host: Optional - default is 127.0.0.1
+    - port: Optional - will use default if not provided
+    - client_id: Optional - default is 99 (for discovery only)
+    
+    Example: {"account_type": "demo"}
+    """
     try:
         if not ib_client:
             logger.error("IB Client Service is not available")
@@ -45,21 +61,25 @@ async def get_available_accounts(data: dict):
         port = data.get('port')
         client_id = data.get('client_id', 99)
         
+        # Validate account type
         if account_type not in ['demo', 'live']:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="account_type must be 'demo' or 'live'"
             )
         
+        # Get port based on account type if not provided
         if port is None:
             port = 7497 if account_type == "demo" else 7496
         
         logger.info(f"📤 Scanning {account_type.upper()} accounts at {host}:{port}")
         
+        # Temporarily connect to get managed accounts
         try:
             await ib_client.ib.connectAsync(host, port, clientId=client_id)
             await asyncio.sleep(0.5)
             
+            # Get managed accounts
             managed_accounts = ib_client.ib.managedAccounts()
             
             if not managed_accounts:
@@ -72,6 +92,7 @@ async def get_available_accounts(data: dict):
                     "timestamp": datetime.now().isoformat()
                 }
             
+            # Get account values for each account
             accounts_list = []
             for acc in managed_accounts:
                 try:
@@ -83,6 +104,7 @@ async def get_available_accounts(data: dict):
                         "account_pattern": "DU" if acc.startswith("DU") else "U" if acc.startswith("U") else "UNKNOWN",
                     }
                     
+                    # Extract key values
                     for val in account_values:
                         if val.tag == "NetLiquidation":
                             account_info["equity"] = float(val.value)
@@ -100,6 +122,7 @@ async def get_available_accounts(data: dict):
                         "error": str(e)
                     })
             
+            # Disconnect
             if ib_client.ib.isConnected():
                 ib_client.ib.disconnect()
             
@@ -136,7 +159,19 @@ async def get_available_accounts(data: dict):
 
 @router.post("/connect")
 async def connect_to_ib(data: dict):
-    """Connect to IB TWS with account selection"""
+    """
+    Connect to IB TWS with account selection
+    
+    Parameters:
+    - account_name: REQUIRED - Account to connect to (e.g., "DU123456" or "U123456789")
+    - host: Optional - default is 127.0.0.1
+    - port: Optional - will use account type to determine if not provided
+    - client_id: Optional - default is 1
+    
+    First call /get-accounts to see available account names!
+    
+    Example: {"account_name": "DU123456"}
+    """
     try:
         if not ib_client:
             logger.error("IB Client Service is not available")
@@ -145,6 +180,7 @@ async def connect_to_ib(data: dict):
                 detail="IB Client Service not initialized. Check backend logs for errors."
             )
         
+        # Get parameters
         account_name = data.get('account_name')
         if not account_name:
             raise HTTPException(
@@ -156,6 +192,7 @@ async def connect_to_ib(data: dict):
         port = data.get('port')
         client_id = data.get('client_id', 1)
         
+        # Determine account type from account name
         if account_name.startswith("DU"):
             account_type = "demo"
             if port is None:
@@ -174,6 +211,7 @@ async def connect_to_ib(data: dict):
         
         logger.info(f"📤 Connecting to {account_name} ({account_label}) at {host}:{port}")
         
+        # Connect
         result = await ib_client.connect(
             account_type=account_type,
             account_name=account_name,
@@ -351,7 +389,7 @@ async def get_orders():
 
 @router.post("/orders/place")
 async def place_order(data: dict):
-    """Place a new order - FIXED VERSION"""
+    """Place a new order"""
     try:
         if not ib_client:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
@@ -368,27 +406,11 @@ async def place_order(data: dict):
         if action not in ['BUY', 'SELL']:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="action must be BUY or SELL")
         
-        # FIXED: Remove duplicate keys before unpacking
-        filtered_data = dict(data)
-        filtered_data.pop('order_type', None)
-        filtered_data.pop('quantity', None)
-        filtered_data.pop('action', None)
-        filtered_data.pop('contract_type', None)
-        filtered_data.pop('limit_price', None)
-        
-        result = await ib_client.place_order(
-            contract_type,
-            action,
-            quantity,
-            order_type=order_type,
-            limit_price=limit_price,
-            **filtered_data
-        )
+        result = await ib_client.place_order(contract_type, action, quantity, order_type=order_type, limit_price=limit_price, **data)
         return result
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"Error placing order: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.delete("/orders/{order_id}")
