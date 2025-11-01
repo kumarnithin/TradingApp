@@ -2,285 +2,348 @@
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import styles from './analytics.module.css'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-interface PerformanceMetrics {
-  totalPnL: number
-  winRate: number
-  sharpeRatio: number
-  maxDrawdown: number
-  totalTrades: number
-  winningTrades: number
-  losingTrades: number
-  averageWin: number
-  averageLoss: number
-  profitFactor: number
-  bestTrade: number
-  worstTrade: number
-}
-
 export default function AnalyticsPage() {
-  const [metrics, setMetrics] = useState<PerformanceMetrics>({
-    totalPnL: 0,
-    winRate: 0,
-    sharpeRatio: 0,
-    maxDrawdown: 0,
-    totalTrades: 0,
-    winningTrades: 0,
-    losingTrades: 0,
-    averageWin: 0,
-    averageLoss: 0,
-    profitFactor: 0,
-    bestTrade: 0,
-    worstTrade: 0
-  })
-  const [loading, setLoading] = useState(true)
-  const [equityData, setEquityData] = useState<any[]>([])
-  const [monthlyData, setMonthlyData] = useState<any[]>([])
-  const [strategyData, setStrategyData] = useState<any[]>([])
+  // ===== STATE VARIABLES =====
+  const [analytics, setAnalytics] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
 
+  // Account filter states
+  const [currentAccountId, setCurrentAccountId] = useState<string | null>(null)
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
+  const [showAllAccounts, setShowAllAccounts] = useState(false)
+  const [isMultiSelect, setIsMultiSelect] = useState(false)
+
+  // ===== LOAD FILTER STATE FROM LOCALSTORAGE =====
   useEffect(() => {
-    fetchAnalytics()
+    console.log('🔄 Loading filter state from localStorage...')
+
+    const savedShowAll = localStorage.getItem('showAllAccounts')
+    const savedAccountId = localStorage.getItem('currentAccountId')
+    const savedSelectedAccounts = localStorage.getItem('selectedAccounts')
+    const savedIsMultiSelect = localStorage.getItem('isMultiSelectMode')
+
+    if (savedIsMultiSelect === 'true' && savedSelectedAccounts) {
+      console.log('✅ Setting Multi-Select mode')
+      setIsMultiSelect(true)
+      setSelectedAccounts(JSON.parse(savedSelectedAccounts))
+      setShowAllAccounts(false)
+      setCurrentAccountId(null)
+    } else if (savedShowAll === 'true') {
+      console.log('✅ Setting All Accounts mode')
+      setShowAllAccounts(true)
+      setSelectedAccounts([])
+      setIsMultiSelect(false)
+      setCurrentAccountId(null)
+    } else if (savedAccountId) {
+      console.log('✅ Setting Single Account mode:', savedAccountId)
+      setCurrentAccountId(savedAccountId)
+      setShowAllAccounts(false)
+      setSelectedAccounts([])
+      setIsMultiSelect(false)
+    }
   }, [])
 
-  const fetchAnalytics = async () => {
-    try {
-      const [metricsRes, equityRes, monthlyRes, strategyRes] = await Promise.all([
-        axios.get(`${API_URL}/api/v1/analytics/metrics`),
-        axios.get(`${API_URL}/api/v1/analytics/equity-curve`),
-        axios.get(`${API_URL}/api/v1/analytics/monthly-performance`),
-        axios.get(`${API_URL}/api/v1/analytics/strategy-performance`)
-      ])
+  // ===== LISTEN FOR ACCOUNT CHANGES FROM SWITCHER =====
+  useEffect(() => {
+    console.log('📡 Registering accountChanged event listener')
 
-      setMetrics(metricsRes.data)
-      setEquityData(equityRes.data)
-      setMonthlyData(monthlyRes.data)
-      setStrategyData(strategyRes.data)
+    const handleAccountChange = (event: any) => {
+      console.log('📩 Received accountChanged event:', event.detail)
+
+      const { account, showAll, selectedAccounts: selected, isMultiSelect: multiSelect } = event.detail
+
+      if (multiSelect && selected && selected.length > 0) {
+        console.log('✅ Multi-Select event received:', selected)
+        setIsMultiSelect(true)
+        setSelectedAccounts(selected)
+        setShowAllAccounts(false)
+        setCurrentAccountId(null)
+      } else if (showAll) {
+        console.log('✅ All Accounts event received')
+        setShowAllAccounts(true)
+        setSelectedAccounts([])
+        setIsMultiSelect(false)
+        setCurrentAccountId(null)
+      } else if (account) {
+        console.log('✅ Single Account event received:', account.id)
+        setCurrentAccountId(account.id)
+        setShowAllAccounts(false)
+        setSelectedAccounts([])
+        setIsMultiSelect(false)
+      }
+    }
+
+    window.addEventListener('accountChanged', handleAccountChange)
+
+    return () => {
+      console.log('🧹 Cleaning up event listener')
+      window.removeEventListener('accountChanged', handleAccountChange)
+    }
+  }, [])
+
+  // ===== LOAD ANALYTICS WHENEVER FILTER CHANGES =====
+  useEffect(() => {
+    console.log('🔄 Filter changed, loading analytics...')
+    console.log('Current state:', {
+      currentAccountId,
+      selectedAccounts,
+      showAllAccounts,
+      isMultiSelect,
+    })
+    loadAnalytics()
+  }, [currentAccountId, selectedAccounts, showAllAccounts, isMultiSelect])
+
+  // ===== LOAD ANALYTICS FROM API =====
+  const loadAnalytics = async () => {
+    try {
+      setLoading(true)
+
+      // BUILD THE API URL
+      let url = `${API_URL}/api/v1/analytics/summary`
+
+      if (isMultiSelect && selectedAccounts.length > 0) {
+        // MULTI-SELECT MODE: Send multiple account IDs
+        const accountIds = selectedAccounts.join(',')
+        url += `?account_ids=${accountIds}`
+        console.log(`📋 Multi-select mode - Loading analytics for accounts: ${accountIds}`)
+      } else if (!showAllAccounts && currentAccountId) {
+        // SINGLE ACCOUNT MODE: Send single account ID
+        url += `?account_id=${currentAccountId}`
+        console.log(`📋 Single account mode - Loading analytics for account: ${currentAccountId}`)
+      } else if (showAllAccounts) {
+        // ALL ACCOUNTS MODE: No filter
+        console.log('📋 All accounts mode - Loading analytics for all accounts')
+      }
+
+      console.log('🌐 Fetching from:', url)
+
+      const response = await axios.get(url)
+      console.log('✅ Response received:', response.data)
+
+      setAnalytics(response.data || {})
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching analytics:', error)
+      console.error('❌ Error loading analytics:', error)
       setLoading(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner}></div>
-        <p>Loading analytics...</p>
-      </div>
-    )
-  }
-
+  // ===== RENDER =====
   return (
-    <div className={styles.analyticsPage}>
-      {/* Header */}
-      <div className={styles.pageHeader}>
+    <div style={{ padding: '2rem' }}>
+      <h1>Analytics</h1>
+
+      {/* FILTER INDICATOR */}
+      <div
+        style={{
+          padding: '0.75rem 1rem',
+          background: isMultiSelect ? '#8b5cf6' : showAllAccounts ? '#3b82f6' : '#10b981',
+          color: 'white',
+          borderRadius: '8px',
+          marginBottom: '2rem',
+          display: 'inline-block',
+          fontWeight: '600',
+          fontSize: '1rem',
+        }}
+      >
+        {isMultiSelect
+          ? `✅ ${selectedAccounts.length} Account${selectedAccounts.length !== 1 ? 's' : ''} Selected`
+          : showAllAccounts
+            ? '📊 All Accounts'
+            : '🏢 Single Account'}
+      </div>
+
+      {/* LOADING STATE */}
+      {loading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading analytics...</div>}
+
+      {/* ANALYTICS CARDS */}
+      {!loading && analytics && (
         <div>
-          <h1 className={styles.pageTitle}>📊 Trading Analytics</h1>
-          <p className={styles.pageSubtitle}>Comprehensive performance analysis and insights</p>
-        </div>
-      </div>
-
-      {/* Performance Summary Cards */}
-      <div className={styles.summaryGrid}>
-        <MetricCard
-          title="Total P&L"
-          value={`$${metrics.totalPnL.toFixed(2)}`}
-          change={((metrics.totalPnL / 100000) * 100).toFixed(2)}
-          icon="💰"
-          positive={metrics.totalPnL >= 0}
-        />
-        <MetricCard
-          title="Win Rate"
-          value={`${metrics.winRate.toFixed(1)}%`}
-          subtitle={`${metrics.winningTrades}W / ${metrics.losingTrades}L`}
-          icon="🎯"
-          positive={metrics.winRate >= 50}
-        />
-        <MetricCard
-          title="Sharpe Ratio"
-          value={metrics.sharpeRatio.toFixed(2)}
-          subtitle="Risk-adjusted return"
-          icon="📈"
-          positive={metrics.sharpeRatio >= 1}
-        />
-        <MetricCard
-          title="Max Drawdown"
-          value={`${metrics.maxDrawdown.toFixed(2)}%`}
-          subtitle="Largest peak-to-trough"
-          icon="📉"
-          positive={metrics.maxDrawdown <= -10}
-          inverse={true}
-        />
-      </div>
-
-      {/* Detailed Metrics */}
-      <div className={styles.detailedMetrics}>
-        <div className={`${styles.metricsPanel} glass-light`}>
-          <h3 className={styles.panelTitle}>Trade Statistics</h3>
-          <div className={styles.metricsList}>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Total Trades</span>
-              <span className={styles.metricValue}>{metrics.totalTrades}</span>
-            </div>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Winning Trades</span>
-              <span className={`${styles.metricValue} ${styles.positive}`}>{metrics.winningTrades}</span>
-            </div>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Losing Trades</span>
-              <span className={`${styles.metricValue} ${styles.negative}`}>{metrics.losingTrades}</span>
-            </div>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Average Win</span>
-              <span className={`${styles.metricValue} ${styles.positive}`}>
-                ${metrics.averageWin.toFixed(2)}
-              </span>
-            </div>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Average Loss</span>
-              <span className={`${styles.metricValue} ${styles.negative}`}>
-                ${metrics.averageLoss.toFixed(2)}
-              </span>
-            </div>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Profit Factor</span>
-              <span className={styles.metricValue}>{metrics.profitFactor.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className={`${styles.metricsPanel} glass-light`}>
-          <h3 className={styles.panelTitle}>Best & Worst Trades</h3>
-          <div className={styles.metricsList}>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Best Trade</span>
-              <span className={`${styles.metricValue} ${styles.positive}`}>
-                +${metrics.bestTrade.toFixed(2)}
-              </span>
-            </div>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Worst Trade</span>
-              <span className={`${styles.metricValue} ${styles.negative}`}>
-                ${metrics.worstTrade.toFixed(2)}
-              </span>
-            </div>
-            <div className={styles.metricRow}>
-              <span className={styles.metricLabel}>Risk/Reward Ratio</span>
-              <span className={styles.metricValue}>
-                {(Math.abs(metrics.averageWin / metrics.averageLoss) || 0).toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      <div className={styles.chartsGrid}>
-        {/* Equity Curve Placeholder */}
-        <div className={`${styles.chartPanel} glass-light`}>
-          <h3 className={styles.panelTitle}>📈 Equity Curve</h3>
-          <div className={styles.chartPlaceholder}>
-            <p>Equity curve chart</p>
-            <p className={styles.chartNote}>(Install recharts to render)</p>
-          </div>
-        </div>
-
-        {/* Monthly Heatmap Placeholder */}
-        <div className={`${styles.chartPanel} glass-light`}>
-          <h3 className={styles.panelTitle}>📅 Monthly Performance</h3>
-          <div className={styles.heatmapGrid}>
-            {[...Array(12)].map((_, i) => (
-              <div key={i} className={styles.heatmapCell} style={{
-                backgroundColor: Math.random() > 0.5 
-                  ? 'rgba(34, 197, 94, 0.3)' 
-                  : 'rgba(239, 68, 68, 0.3)'
-              }}>
-                <span className={styles.heatmapValue}>
-                  {Math.floor(Math.random() * 2000 - 1000)}
-                </span>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '1.5rem',
+              marginBottom: '2rem',
+            }}
+          >
+            {/* Total Trades Card */}
+            <div
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '1.5rem',
+                borderLeft: '4px solid #3b82f6',
+              }}
+            >
+              <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Total Trades</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6', marginTop: '0.5rem' }}>
+                {analytics.total_trades || 0}
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
+            </div>
 
-      {/* Strategy Comparison */}
-      <div className={`${styles.strategySection} glass-light`}>
-        <h3 className={styles.panelTitle}>🎯 Strategy Performance Comparison</h3>
-        <div className={styles.strategyGrid}>
-          {strategyData.length > 0 ? (
-            strategyData.map((strategy, idx) => (
-              <div key={idx} className={styles.strategyCard}>
-                <div className={styles.strategyHeader}>
-                  <h4 className={styles.strategyName}>{strategy.name}</h4>
-                  <span className={`${styles.statusBadge} ${
-                    strategy.pnl >= 0 ? styles.positive : styles.negative
-                  }`}>
-                    {strategy.pnl >= 0 ? '📈' : '📉'} ${strategy.pnl.toFixed(2)}
-                  </span>
-                </div>
-                <div className={styles.strategyMetrics}>
-                  <div className={styles.strategyMetric}>
-                    <span>Win Rate:</span>
-                    <span className={styles.value}>{strategy.winRate.toFixed(1)}%</span>
-                  </div>
-                  <div className={styles.strategyMetric}>
-                    <span>Trades:</span>
-                    <span className={styles.value}>{strategy.trades}</span>
-                  </div>
-                  <div className={styles.strategyMetric}>
-                    <span>Avg Trade:</span>
-                    <span className={styles.value}>${strategy.avgTrade.toFixed(2)}</span>
-                  </div>
-                </div>
-                <div className={styles.progressBar}>
-                  <div 
-                    className={styles.progressFill}
-                    style={{ 
-                      width: `${strategy.winRate}%`,
-                      background: strategy.winRate >= 50 
-                        ? 'linear-gradient(90deg, #10b981, #22c55e)'
-                        : 'linear-gradient(90deg, #ef4444, #f43f5e)'
-                    }}
-                  ></div>
-                </div>
+            {/* Win Rate Card */}
+            <div
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '1.5rem',
+                borderLeft: `4px solid ${(analytics.win_rate || 0) >= 50 ? '#10b981' : '#ef4444'}`,
+              }}
+            >
+              <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Win Rate</div>
+              <div
+                style={{
+                  fontSize: '2rem',
+                  fontWeight: 'bold',
+                  color: (analytics.win_rate || 0) >= 50 ? '#10b981' : '#ef4444',
+                  marginTop: '0.5rem',
+                }}
+              >
+                {(analytics.win_rate || 0).toFixed(1)}%
               </div>
-            ))
-          ) : (
-            <p className={styles.emptyState}>No strategy data available</p>
+            </div>
+
+            {/* Total P&L Card */}
+            <div
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '1.5rem',
+                borderLeft: `4px solid ${(analytics.total_pnl || 0) >= 0 ? '#10b981' : '#ef4444'}`,
+              }}
+            >
+              <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Total P&L</div>
+              <div
+                style={{
+                  fontSize: '2rem',
+                  fontWeight: 'bold',
+                  color: (analytics.total_pnl || 0) >= 0 ? '#10b981' : '#ef4444',
+                  marginTop: '0.5rem',
+                }}
+              >
+                ${(analytics.total_pnl || 0).toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+            </div>
+
+            {/* Avg Trade P&L Card */}
+            <div
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '1.5rem',
+                borderLeft: '4px solid #8b5cf6',
+              }}
+            >
+              <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Avg Trade P&L</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#8b5cf6', marginTop: '0.5rem' }}>
+                ${(analytics.avg_trade_pnl || 0).toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+            </div>
+
+            {/* Best Trade Card */}
+            <div
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '1.5rem',
+                borderLeft: '4px solid #10b981',
+              }}
+            >
+              <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Best Trade</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#10b981', marginTop: '0.5rem' }}>
+                ${(analytics.best_trade || 0).toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+            </div>
+
+            {/* Worst Trade Card */}
+            <div
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '1.5rem',
+                borderLeft: '4px solid #ef4444',
+              }}
+            >
+              <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Worst Trade</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ef4444', marginTop: '0.5rem' }}>
+                ${(analytics.worst_trade || 0).toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Additional Metrics */}
+          {(showAllAccounts || isMultiSelect) && (
+            <div
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '2rem',
+                marginTop: '2rem',
+              }}
+            >
+              <h2 style={{ color: '#e2e8f0', marginBottom: '1rem' }}>Account Details</h2>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '1rem',
+                }}
+              >
+                {analytics.accounts && analytics.accounts.map((account: any) => (
+                  <div key={account.id} style={{ padding: '1rem', background: '#0f172a', borderRadius: '4px' }}>
+                    <div style={{ color: '#60a5fa', fontWeight: 'bold' }}>{account.account_name}</div>
+                    <div style={{ color: '#94a3b8', marginTop: '0.5rem' }}>Trades: {account.total_trades}</div>
+                    <div style={{ color: '#10b981', marginTop: '0.25rem' }}>P&L: ${account.total_pnl}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
-      </div>
-    </div>
-  )
-}
+      )}
 
-// Metric Card Component
-function MetricCard({ title, value, change, subtitle, icon, positive, inverse }: any) {
-  return (
-    <div className={`${styles.metricCard} glass-light`}>
-      <div className={styles.cardHeader}>
-        <span className={styles.cardIcon}>{icon}</span>
-        <h3 className={styles.cardTitle}>{title}</h3>
-      </div>
-      <p className={`${styles.cardValue} ${
-        positive ? (inverse ? styles.negative : styles.positive) : 
-        (inverse ? styles.positive : styles.negative)
-      }`}>
-        {value}
-      </p>
-      {change && (
-        <p className={`${styles.cardChange} ${positive ? styles.positive : styles.negative}`}>
-          {positive ? '+' : ''}{change}% from initial
-        </p>
-      )}
-      {subtitle && (
-        <p className={styles.cardSubtitle}>{subtitle}</p>
-      )}
+      {/* DEBUG INFO (Remove later) */}
+      <details
+        style={{ marginTop: '2rem', padding: '1rem', background: '#0f172a', borderRadius: '8px', cursor: 'pointer' }}
+      >
+        <summary style={{ color: '#94a3b8', fontWeight: 'bold' }}>Debug Info</summary>
+        <pre style={{ color: '#60a5fa', overflow: 'auto', marginTop: '1rem' }}>
+          {JSON.stringify(
+            {
+              currentAccountId,
+              selectedAccounts,
+              showAllAccounts,
+              isMultiSelect,
+              analyticsLoaded: !!analytics,
+            },
+            null,
+            2
+          )}
+        </pre>
+      </details>
     </div>
   )
 }

@@ -120,3 +120,25 @@ body::before {
   .hidden { display: block; }
   .lg\:flex { display: none; }
 }
+
+/* Fix table text visibility - ONLY tables, nothing else */
+table {
+  color: #1f2937;
+}
+
+table th {
+  color: #1f2937;
+}
+
+table td {
+  color: #1f2937;
+}
+
+/* Alternative: if using styled divs as tables */
+[role="table"] {
+  color: #1f2937;
+}
+
+[role="table"] > div {
+  color: #1f2937;
+}

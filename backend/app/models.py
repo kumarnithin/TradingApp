@@ -211,6 +211,8 @@ class Alert(Base):
     profit_loss = Column(Float, nullable=True)
     profit_loss_percent = Column(Float, nullable=True)
     
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
+
     def __repr__(self):
         return f"<Alert {self.id}: {self.action} {self.quantity} {self.symbol}>"
 
@@ -266,5 +268,177 @@ class StrategyPerformance(Base):
     def __repr__(self):
         return f"<StrategyPerformance {self.strategy_name}>"
 
+"""
+PHASE 1: DATABASE MODELS - MULTI-ACCOUNT SYSTEM
+Add these models to your backend/app/models.py file
+
+Copy this entire code block and add it to the END of your models.py file
+(After all existing models)
+"""
+
+# ============ ACCOUNT MODELS (Add to models.py) ============
+
+class Account(Base):
+    """Manage multiple trading accounts (Demo, Live01, Live02, etc.)"""
+    __tablename__ = "accounts"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    
+    # Account Identity
+    account_name = Column(String, nullable=False, unique=True)  # Demo, Live01, Live02
+    account_type = Column(String, nullable=False)  # DEMO, LIVE
+    ib_account_number = Column(String, nullable=True)  # DU123456 format
+    broker_name = Column(String, default="Interactive Brokers")
+    
+    # Account Status
+    status = Column(String, default="ACTIVE")  # ACTIVE, INACTIVE, CONNECTED, DISCONNECTED
+    is_default = Column(Boolean, default=False)  # Which account opens by default
+    is_active = Column(Boolean, default=True)  # Currently selected
+    
+    # Account Balance
+    account_balance = Column(Float, nullable=True)  # Total balance in account
+    available_balance = Column(Float, nullable=True)  # Available to trade
+    buying_power = Column(Float, nullable=True)  # Margin available
+    currency = Column(String, default="USD")
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    connected_at = Column(DateTime, nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    
+    def __repr__(self):
+        return f"<Account {self.account_name}>"
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "account_name": self.account_name,
+            "account_type": self.account_type,
+            "account_balance": self.account_balance,
+            "available_balance": self.available_balance,
+            "status": self.status,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "connected_at": self.connected_at.isoformat() if self.connected_at else None,
+        }
+
+
+class AccountPerformance(Base):
+    """Track performance metrics for each account"""
+    __tablename__ = "account_performance"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=False, unique=True)
+    
+    # Daily Metrics
+    daily_pnl = Column(Float, default=0)  # Daily profit/loss
+    daily_trades = Column(Integer, default=0)  # Trades today
+    daily_win_rate = Column(Float, nullable=True)  # Win % today (0-100)
+    
+    # Monthly Metrics
+    monthly_pnl = Column(Float, default=0)
+    monthly_trades = Column(Integer, default=0)
+    monthly_win_rate = Column(Float, nullable=True)
+    
+    # Yearly Metrics
+    yearly_pnl = Column(Float, default=0)
+    yearly_trades = Column(Integer, default=0)
+    yearly_win_rate = Column(Float, nullable=True)
+    
+    # Overall Performance
+    total_trades = Column(Integer, default=0)
+    winning_trades = Column(Integer, default=0)
+    losing_trades = Column(Integer, default=0)
+    profit_factor = Column(Float, nullable=True)  # Gross profit / Gross loss
+    drawdown = Column(Float, nullable=True)  # Max drawdown %
+    sharpe_ratio = Column(Float, nullable=True)  # Risk-adjusted return
+    
+    # Best/Worst
+    best_trade = Column(Float, nullable=True)
+    worst_trade = Column(Float, nullable=True)
+    avg_win = Column(Float, nullable=True)
+    avg_loss = Column(Float, nullable=True)
+    
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<AccountPerformance {self.account_id}>"
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "account_id": self.account_id,
+            "daily_pnl": self.daily_pnl,
+            "monthly_pnl": self.monthly_pnl,
+            "yearly_pnl": self.yearly_pnl,
+            "total_trades": self.total_trades,
+            "winning_trades": self.winning_trades,
+            "win_rate": self.monthly_win_rate,
+            "profit_factor": self.profit_factor,
+        }
+
+
+class AccountSettings(Base):
+    """Account-specific settings and configuration"""
+    __tablename__ = "account_settings"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=False, unique=True)
+    
+    # Trading Rules
+    max_daily_loss = Column(Float, default=500)  # Max loss per day ($)
+    max_daily_loss_percent = Column(Float, default=5)  # Max loss per day (%)
+    max_position_size = Column(Float, default=0.3)  # 30% of account per position
+    risk_per_trade = Column(Float, default=0.02)  # 2% risk per trade
+    auto_execute_enabled = Column(Boolean, default=True)  # Auto-execute on signals
+    daily_trade_limit = Column(Integer, default=50)  # Max trades per day
+    
+    # Advanced Settings
+    margin_requirement = Column(Float, default=0.25)  # 25% margin needed
+    min_trade_size = Column(Integer, default=1)  # Minimum shares per trade
+    max_trade_size = Column(Integer, default=1000)  # Maximum shares per trade
+    use_stop_loss = Column(Boolean, default=True)  # Use stop loss
+    use_take_profit = Column(Boolean, default=True)  # Use take profit
+    
+    # Risk Management
+    max_open_positions = Column(Integer, default=10)  # Max concurrent positions
+    max_consecutive_losses = Column(Integer, default=5)  # Stop after N losses
+    halt_after_max_loss = Column(Boolean, default=True)  # Pause trading on max loss
+    
+    # Notifications
+    send_email_alerts = Column(Boolean, default=False)
+    send_sms_alerts = Column(Boolean, default=False)
+    email_address = Column(String, nullable=True)
+    phone_number = Column(String, nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<AccountSettings {self.account_id}>"
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "account_id": self.account_id,
+            "max_daily_loss": self.max_daily_loss,
+            "max_position_size": self.max_position_size,
+            "risk_per_trade": self.risk_per_trade,
+            "auto_execute_enabled": self.auto_execute_enabled,
+            "daily_trade_limit": self.daily_trade_limit,
+        }
+
+
+# ============ UPDATE EXISTING MODELS ============
+
+# ADD THIS LINE to the Alert model (after existing fields):
+# account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
+
+# ADD THIS LINE to the Trade model (if exists, after existing fields):
+# account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
+
+# ADD THIS LINE to the Signal model (if exists, after existing fields):
+# account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
 
 
