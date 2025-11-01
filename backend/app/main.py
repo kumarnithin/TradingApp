@@ -69,6 +69,14 @@ try:
     logger.info("✓ Signals router loaded")
 except Exception as e:
     logger.error(f"✗ Failed to load Signals router: {e}")
+    
+# Accounts Router (Account Management)
+try:
+    from app.routes.api.v1.accounts import router as accounts_router
+    app.include_router(accounts_router, prefix="/api/v1")
+    logger.info("✓ Accounts router loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Accounts router failed to load: {e}")
 
 # Alerts Router (Database Management)
 try:

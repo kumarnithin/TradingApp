@@ -5,517 +5,247 @@ import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-interface SignalConfig {
-  enabled: boolean
-  default_quantity: number
-  strategy_name: string
-  auto_execute: boolean
-  max_daily_trades: number
-  risk_per_trade: number
-  stop_loss_percent?: number
-  take_profit_percent?: number
-}
-
-interface SignalStatus {
-  connected_to_ib: boolean
-  auto_execute_enabled: boolean
-  signals_enabled: boolean
-  daily_trades: number
-  max_daily_trades: number
-  remaining_trades: number
-  account: {
-    name: string
-    type: string
-  }
-}
-
-interface SignalEvent {
-  id: number
-  type: string
-  message: string
-  timestamp: string
-}
-
 export default function SignalsPage() {
-  const [config, setConfig] = useState<SignalConfig>({
-    enabled: true,
-    default_quantity: 10,
-    strategy_name: 'TradingView',
-    auto_execute: true,
-    max_daily_trades: 50,
-    risk_per_trade: 0.02
-  })
-  const [status, setStatus] = useState<SignalStatus | null>(null)
-  const [history, setHistory] = useState<SignalEvent[]>([])
+  // ===== STATE VARIABLES =====
+  const [signals, setSignals] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
-  const [webhookUrl, setWebhookUrl] = useState('')
 
+  // Account filter states
+  const [currentAccountId, setCurrentAccountId] = useState<string | null>(null)
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
+  const [showAllAccounts, setShowAllAccounts] = useState(false)
+  const [isMultiSelect, setIsMultiSelect] = useState(false)
+
+  // ===== LOAD FILTER STATE FROM LOCALSTORAGE =====
   useEffect(() => {
-    loadStatus()
-    loadConfig()
-    loadHistory()
-    const interval = setInterval(() => {
-      loadStatus()
-      loadHistory()
-    }, 5000)
-    return () => clearInterval(interval)
+    console.log('🔄 Loading filter state from localStorage...')
+
+    const savedShowAll = localStorage.getItem('showAllAccounts')
+    const savedAccountId = localStorage.getItem('currentAccountId')
+    const savedSelectedAccounts = localStorage.getItem('selectedAccounts')
+    const savedIsMultiSelect = localStorage.getItem('isMultiSelectMode')
+
+    if (savedIsMultiSelect === 'true' && savedSelectedAccounts) {
+      console.log('✅ Setting Multi-Select mode')
+      setIsMultiSelect(true)
+      setSelectedAccounts(JSON.parse(savedSelectedAccounts))
+      setShowAllAccounts(false)
+      setCurrentAccountId(null)
+    } else if (savedShowAll === 'true') {
+      console.log('✅ Setting All Accounts mode')
+      setShowAllAccounts(true)
+      setSelectedAccounts([])
+      setIsMultiSelect(false)
+      setCurrentAccountId(null)
+    } else if (savedAccountId) {
+      console.log('✅ Setting Single Account mode:', savedAccountId)
+      setCurrentAccountId(savedAccountId)
+      setShowAllAccounts(false)
+      setSelectedAccounts([])
+      setIsMultiSelect(false)
+    }
   }, [])
 
+  // ===== LISTEN FOR ACCOUNT CHANGES FROM SWITCHER =====
   useEffect(() => {
-    // Generate webhook URL
-    const url = `${API_URL}/api/v1/signals/webhook`
-    setWebhookUrl(url)
+    console.log('📡 Registering accountChanged event listener')
+
+    const handleAccountChange = (event: any) => {
+      console.log('📩 Received accountChanged event:', event.detail)
+
+      const { account, showAll, selectedAccounts: selected, isMultiSelect: multiSelect } = event.detail
+
+      if (multiSelect && selected && selected.length > 0) {
+        console.log('✅ Multi-Select event received:', selected)
+        setIsMultiSelect(true)
+        setSelectedAccounts(selected)
+        setShowAllAccounts(false)
+        setCurrentAccountId(null)
+      } else if (showAll) {
+        console.log('✅ All Accounts event received')
+        setShowAllAccounts(true)
+        setSelectedAccounts([])
+        setIsMultiSelect(false)
+        setCurrentAccountId(null)
+      } else if (account) {
+        console.log('✅ Single Account event received:', account.id)
+        setCurrentAccountId(account.id)
+        setShowAllAccounts(false)
+        setSelectedAccounts([])
+        setIsMultiSelect(false)
+      }
+    }
+
+    window.addEventListener('accountChanged', handleAccountChange)
+
+    return () => {
+      console.log('🧹 Cleaning up event listener')
+      window.removeEventListener('accountChanged', handleAccountChange)
+    }
   }, [])
 
-  const loadStatus = async () => {
+  // ===== LOAD SIGNALS WHENEVER FILTER CHANGES =====
+  useEffect(() => {
+    console.log('🔄 Filter changed, loading signals...')
+    console.log('Current state:', {
+      currentAccountId,
+      selectedAccounts,
+      showAllAccounts,
+      isMultiSelect,
+    })
+    loadSignals()
+  }, [currentAccountId, selectedAccounts, showAllAccounts, isMultiSelect])
+
+  // ===== LOAD SIGNALS FROM API =====
+  const loadSignals = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/v1/signals/status`)
-      if (response.data.status === 'success') {
-        setStatus(response.data.system)
+      setLoading(true)
+
+      // BUILD THE API URL
+      let url = `${API_URL}/api/v1/signals/list`
+
+      if (isMultiSelect && selectedAccounts.length > 0) {
+        // MULTI-SELECT MODE: Send multiple account IDs
+        const accountIds = selectedAccounts.join(',')
+        url += `?account_ids=${accountIds}`
+        console.log(`📋 Multi-select mode - Loading signals for accounts: ${accountIds}`)
+      } else if (!showAllAccounts && currentAccountId) {
+        // SINGLE ACCOUNT MODE: Send single account ID
+        url += `?account_id=${currentAccountId}`
+        console.log(`📋 Single account mode - Loading signals for account: ${currentAccountId}`)
+      } else if (showAllAccounts) {
+        // ALL ACCOUNTS MODE: No filter
+        console.log('📋 All accounts mode - Loading signals for all accounts')
       }
+
+      console.log('🌐 Fetching from:', url)
+
+      const response = await axios.get(url)
+      console.log('✅ Response received:', response.data)
+
+      setSignals(response.data.signals || [])
+      setLoading(false)
     } catch (error) {
-      console.error('Error loading status:', error)
+      console.error('❌ Error loading signals:', error)
+      setLoading(false)
     }
   }
 
-  const loadConfig = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/v1/signals/config`)
-      if (response.data.status === 'success') {
-        setConfig(response.data.config)
-      }
-    } catch (error) {
-      console.error('Error loading config:', error)
-    }
-  }
-
-  const loadHistory = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/v1/signals/history`)
-      if (response.data.status === 'success') {
-        setHistory(response.data.history.reverse())
-      }
-    } catch (error) {
-      console.error('Error loading history:', error)
-    }
-  }
-
-  const updateConfig = async () => {
-    setLoading(true)
-    try {
-      const response = await axios.post(`${API_URL}/api/v1/signals/config`, config)
-      if (response.data.status === 'success') {
-        alert('✅ Configuration updated successfully!')
-        loadConfig()
-      }
-    } catch (error: any) {
-      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
-    }
-    setLoading(false)
-  }
-
-  const toggleAutoExecute = async () => {
-    setLoading(true)
-    try {
-      const response = await axios.post(`${API_URL}/api/v1/signals/config/toggle`)
-      if (response.data.status === 'success') {
-        loadStatus()
-        loadConfig()
-      }
-    } catch (error: any) {
-      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
-    }
-    setLoading(false)
-  }
-
-  const resetDailyCount = async () => {
-    if (!confirm('Reset daily trade count?')) return
-    setLoading(true)
-    try {
-      const response = await axios.post(`${API_URL}/api/v1/signals/config/reset-daily-count`)
-      if (response.data.status === 'success') {
-        loadStatus()
-      }
-    } catch (error: any) {
-      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
-    }
-    setLoading(false)
-  }
-
-  const testSignal = async () => {
-    setLoading(true)
-    try {
-      const response = await axios.post(`${API_URL}/api/v1/signals/test`)
-      if (response.data.status === 'success') {
-        alert('✅ Test signal sent!')
-        loadHistory()
-      }
-    } catch (error: any) {
-      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
-    }
-    setLoading(false)
-  }
-
-  const copyWebhookUrl = () => {
-    navigator.clipboard.writeText(webhookUrl)
-    alert('✅ Webhook URL copied to clipboard!')
-  }
-
+  // ===== RENDER =====
   return (
-    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-          🤖 Auto Trading - TradingView Signals
-        </h1>
-        <p style={{ color: '#666' }}>Automatically execute trades from TradingView alerts</p>
+    <div style={{ padding: '2rem' }}>
+      <h1>Signals</h1>
+
+      {/* FILTER INDICATOR */}
+      <div
+        style={{
+          padding: '0.75rem 1rem',
+          background: isMultiSelect ? '#8b5cf6' : showAllAccounts ? '#3b82f6' : '#10b981',
+          color: 'white',
+          borderRadius: '8px',
+          marginBottom: '2rem',
+          display: 'inline-block',
+          fontWeight: '600',
+          fontSize: '1rem',
+        }}
+      >
+        {isMultiSelect
+          ? `✅ ${selectedAccounts.length} Account${selectedAccounts.length !== 1 ? 's' : ''} Selected`
+          : showAllAccounts
+            ? '📊 All Accounts'
+            : '🏢 Single Account'}
       </div>
 
-      {/* Status Card */}
-      {status && (
-        <div style={{
-          background: status.auto_execute_enabled ? '#10b981' : '#f97316',
-          color: 'white',
-          padding: '2rem',
-          borderRadius: '8px',
-          marginBottom: '2rem'
-        }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '2rem' }}>
-            <div>
-              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>IB Connection</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {status.connected_to_ib ? '🟢 Connected' : '🔴 Disconnected'}
-              </div>
-              <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                {status.account.name}
-              </div>
-            </div>
+      {/* LOADING STATE */}
+      {loading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading signals...</div>}
 
-            <div>
-              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Auto Execute</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {status.auto_execute_enabled ? '✅ ENABLED' : '❌ DISABLED'}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Daily Trades</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {status.daily_trades} / {status.max_daily_trades}
-              </div>
-              <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                {status.remaining_trades} remaining
-              </div>
-            </div>
-          </div>
-
-          <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
-            <button
-              onClick={toggleAutoExecute}
-              disabled={loading}
+      {/* SIGNALS TABLE */}
+      {!loading && (
+        <div>
+          {signals.length === 0 ? (
+            <div
               style={{
-                padding: '0.75rem 1.5rem',
-                background: 'white',
-                color: status.auto_execute_enabled ? '#f97316' : '#10b981',
-                border: 'none',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
+                textAlign: 'center',
+                padding: '2rem',
+                background: '#1e293b',
+                borderRadius: '8px',
+                color: '#94a3b8',
               }}
             >
-              {status.auto_execute_enabled ? '⛔ Disable' : '✅ Enable'}
-            </button>
-
-            <button
-              onClick={resetDailyCount}
-              disabled={loading}
+              No signals found for selected filter
+            </div>
+          ) : (
+            <table
               style={{
-                padding: '0.75rem 1.5rem',
-                background: 'rgba(255,255,255,0.2)',
-                color: 'white',
-                border: '1px solid white',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
+                width: '100%',
+                borderCollapse: 'collapse',
+                background: '#1e293b',
+                borderRadius: '8px',
+                overflow: 'hidden',
               }}
             >
-              🔄 Reset Count
-            </button>
-
-            <button
-              onClick={testSignal}
-              disabled={loading}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: 'rgba(255,255,255,0.2)',
-                color: 'white',
-                border: '1px solid white',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
-              }}
-            >
-              🧪 Test Signal
-            </button>
-          </div>
+              <thead>
+                <tr style={{ background: '#0f172a', borderBottom: '2px solid #334155' }}>
+                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Symbol</th>
+                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Signal Type</th>
+                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Strength</th>
+                  {(showAllAccounts || isMultiSelect) && (
+                    <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Account</th>
+                  )}
+                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Status</th>
+                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {signals.map((signal: any, index: number) => (
+                  <tr
+                    key={signal.id}
+                    style={{
+                      borderBottom: index < signals.length - 1 ? '1px solid #334155' : 'none',
+                      background: index % 2 === 0 ? 'transparent' : '#0f172a30',
+                    }}
+                  >
+                    <td style={{ padding: '1rem', color: '#e2e8f0' }}>
+                      <strong>{signal.symbol}</strong>
+                    </td>
+                    <td style={{ padding: '1rem', color: '#e2e8f0' }}>{signal.signal_type}</td>
+                    <td style={{ padding: '1rem', color: signal.strength === 'STRONG' ? '#10b981' : '#f59e0b' }}>
+                      {signal.strength}
+                    </td>
+                    {(showAllAccounts || isMultiSelect) && (
+                      <td style={{ padding: '1rem', color: '#60a5fa' }}>{signal.account_name}</td>
+                    )}
+                    <td style={{ padding: '1rem', color: '#10b981' }}>{signal.status}</td>
+                    <td style={{ padding: '1rem', color: '#94a3b8' }}>
+                      {new Date(signal.created_at).toLocaleTimeString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
-      {/* Configuration */}
-      <div style={{
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '2rem',
-        background: 'white',
-        marginBottom: '2rem'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem' }}>⚙️ Configuration</h2>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Strategy Name
-            </label>
-            <input
-              type="text"
-              value={config.strategy_name}
-              onChange={(e) => setConfig({ ...config, strategy_name: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Default Quantity
-            </label>
-            <input
-              type="number"
-              value={config.default_quantity}
-              onChange={(e) => setConfig({ ...config, default_quantity: parseFloat(e.target.value) })}
-              min="0.1"
-              step="0.1"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Max Daily Trades
-            </label>
-            <input
-              type="number"
-              value={config.max_daily_trades}
-              onChange={(e) => setConfig({ ...config, max_daily_trades: parseInt(e.target.value) })}
-              min="1"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Risk Per Trade (%)
-            </label>
-            <input
-              type="number"
-              value={config.risk_per_trade * 100}
-              onChange={(e) => setConfig({ ...config, risk_per_trade: parseFloat(e.target.value) / 100 })}
-              min="0.1"
-              step="0.1"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Stop Loss (%)
-            </label>
-            <input
-              type="number"
-              value={config.stop_loss_percent || ''}
-              onChange={(e) => setConfig({ ...config, stop_loss_percent: e.target.value ? parseFloat(e.target.value) : undefined })}
-              min="0.1"
-              step="0.1"
-              placeholder="Optional"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Take Profit (%)
-            </label>
-            <input
-              type="number"
-              value={config.take_profit_percent || ''}
-              onChange={(e) => setConfig({ ...config, take_profit_percent: e.target.value ? parseFloat(e.target.value) : undefined })}
-              min="0.1"
-              step="0.1"
-              placeholder="Optional"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={updateConfig}
-          disabled={loading}
-          style={{
-            padding: '0.75rem 2rem',
-            background: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            fontWeight: 'bold',
-            cursor: 'pointer'
-          }}
-        >
-          {loading ? '⏳ Saving...' : '💾 Save Configuration'}
-        </button>
-      </div>
-
-      {/* Webhook Setup */}
-      <div style={{
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '2rem',
-        background: '#f9fafb',
-        marginBottom: '2rem'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>🔗 TradingView Webhook Setup</h2>
-
-        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '4px', marginBottom: '1rem' }}>
-          <p style={{ color: '#666', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-            Webhook URL:
-          </p>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input
-              type="text"
-              value={webhookUrl}
-              readOnly
-              style={{
-                flex: 1,
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                fontFamily: 'monospace',
-                fontSize: '0.875rem'
-              }}
-            />
-            <button
-              onClick={copyWebhookUrl}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
-              }}
-            >
-              📋 Copy
-            </button>
-          </div>
-        </div>
-
-        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '4px' }}>
-          <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>Signal JSON Format:</p>
-          <pre style={{
-            background: '#1f2937',
-            color: '#10b981',
-            padding: '1rem',
-            borderRadius: '4px',
-            overflowX: 'auto',
-            fontSize: '0.85rem'
-          }}>
-{`{
-  "symbol": "AAPL",
-  "action": "BUY",
-  "contract_type": "stock",
-  "quantity": 10,
-  "order_type": "MKT",
-  "strategy": "My Strategy",
-  "timeframe": "1H",
-  "exchange": "NASDAQ"
-}`}
-          </pre>
-        </div>
-      </div>
-
-      {/* Signal History */}
-      <div style={{
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '2rem',
-        background: 'white'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>📝 Signal History</h2>
-        <div style={{
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          maxHeight: '500px',
-          overflowY: 'auto'
-        }}>
-          {history.length > 0 ? (
-            history.map((event) => (
-              <div
-                key={event.id}
-                style={{
-                  padding: '1rem',
-                  borderBottom: '1px solid #e5e7eb',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span style={{ fontSize: '1.25rem' }}>
-                    {event.type === 'success' ? '✅' : event.type === 'error' ? '❌' : event.type === 'warning' ? '⚠️' : event.type === 'info' ? 'ℹ️' : '📨'}
-                  </span>
-                  <span>{event.message}</span>
-                </div>
-                <span style={{ color: '#666', fontSize: '0.8rem' }}>
-                  {new Date(event.timestamp).toLocaleTimeString()}
-                </span>
-              </div>
-            ))
-          ) : (
-            <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
-              No signals yet
-            </div>
+      {/* DEBUG INFO (Remove later) */}
+      <details
+        style={{ marginTop: '2rem', padding: '1rem', background: '#0f172a', borderRadius: '8px', cursor: 'pointer' }}
+      >
+        <summary style={{ color: '#94a3b8', fontWeight: 'bold' }}>Debug Info</summary>
+        <pre style={{ color: '#60a5fa', overflow: 'auto', marginTop: '1rem' }}>
+          {JSON.stringify(
+            {
+              currentAccountId,
+              selectedAccounts,
+              showAllAccounts,
+              isMultiSelect,
+              signalsCount: signals.length,
+            },
+            null,
+            2
           )}
-        </div>
-      </div>
+        </pre>
+      </details>
     </div>
   )
 }
