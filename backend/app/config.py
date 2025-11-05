@@ -1,35 +1,67 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
+"""
+Configuration and Database Setup - Phase 0.5 Modified
+Defines database connection and session management
+"""
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables"""
-    
-    # Database
-    database_url: str
-    
-    # Security
-    secret_key: str
-    jwt_secret_key: str
-    
-    # IBKR
-    ibkr_host: str = "127.0.0.1"
-    ibkr_port: int = 7497
-    ibkr_client_id: int = 1
-    paper_trading: bool = True
-    
-    # Webhook
-    webhook_secret: str
-    
-    # Redis (optional)
-    redis_url: Optional[str] = None
-    
-    # Application
-    environment: str = "development"
-    debug: bool = True
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from dotenv import load_dotenv
 
-# Create global settings instance
-settings = Settings()
+load_dotenv()
+
+# ==================== DATABASE CONFIGURATION ====================
+
+# Get database URL from environment or use default
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:password@localhost/trading_app"
+)
+
+print(f"📊 Database URL: {DATABASE_URL}")
+
+# Create SQLAlchemy engine
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,  # Set to True for SQL debugging
+    pool_pre_ping=True,  # Verify connection before using
+    pool_size=10,
+    max_overflow=20
+)
+
+# Create session factory
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+# ==================== DEPENDENCY INJECTION ====================
+
+def get_db():
+    """
+    Dependency injection for database sessions
+    Used in FastAPI route handlers like: async def my_route(db: Session = Depends(get_db))
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# ==================== DATABASE INITIALIZATION ====================
+
+def init_db():
+    """
+    Initialize database by creating all tables
+    Call this once when the app starts
+    """
+    from app.database import Base
+    
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables created/verified")
+    except Exception as e:
+        print
+        (f"❌ Error creating tables: {str(e)}")
+        raise

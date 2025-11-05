@@ -1,335 +1,208 @@
 """
-ALERTS.PY - FINAL CORRECTED VERSION
-Imports SessionLocal from app.database (NOT app.models)
+Alerts API Routes - Phase 0.5 Modified
+Now supports account_id filtering and storage
 """
 
-from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import desc, and_
-from datetime import datetime, timedelta
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app.config import get_db
+from app.database import Alert, Account
+from datetime import datetime
 from typing import Optional
+from pydantic import BaseModel
 import logging
-
-# ✅ CORRECT: Import from app.database, NOT app.models!
-from app.database import SessionLocal
-from app.models import Alert
+import uuid
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/alerts", tags=["Alerts Management"])
 
-# ============ ALERT ENDPOINTS ============
+router = APIRouter(tags=["Alerts"])
+
+# ==================== Pydantic Models ====================
+
+class AlertCreate(BaseModel):
+    account_id: Optional[str] = None  # ✅ ACCOUNT_ID FROM FRONTEND
+    symbol: str
+    action: str
+    quantity: int
+    order_type: Optional[str] = "MKT"
+    limit_price: Optional[float] = None
+    status: str = "pending"
+    strategy_id: Optional[str] = None
+    strategy: Optional[str] = None
+
+# ==================== ENDPOINTS ====================
+
+@router.post("/create")
+async def create_alert(alert_data: AlertCreate, db: Session = Depends(get_db)):
+    """
+    ✅ MODIFIED: Now accepts account_id from frontend
+    
+    POST /api/v1/alerts/create
+    Body:
+    {
+        "account_id": "uuid-of-selected-account",
+        "symbol": "EURUSD",
+        "action": "BUY",
+        "quantity": 10000,
+        "strategy_id": "strategy-1"
+    }
+    """
+    try:
+        # ✅ VALIDATE ACCOUNT EXISTS
+        if alert_data.account_id:
+            account = db.query(Account).filter(Account.id == alert_data.account_id).first()
+            if not account:
+                raise HTTPException(status_code=400, detail=f"Account {alert_data.account_id} not found")
+        
+        # Create alert with account_id
+        alert = Alert(
+            id=str(uuid.uuid4()),
+            account_id=alert_data.account_id,  # ✅ NOW STORING ACCOUNT_ID
+            symbol=alert_data.symbol,
+            action=alert_data.action.upper(),
+            quantity=alert_data.quantity,
+            order_type=alert_data.order_type,
+            limit_price=alert_data.limit_price,
+            strategy_id=alert_data.strategy_id,
+            strategy=alert_data.strategy,
+            status=alert_data.status,
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(alert)
+        db.commit()
+        db.refresh(alert)
+        
+        logger.info(f"✅ Alert created: {alert.id} for account {alert.account_id}")
+        
+        return {
+            "status": "success",
+            "alert_id": alert.id,
+            "account_id": alert.account_id,
+            "message": "Alert created"
+        }
+    
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Error creating alert: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/list")
 async def list_alerts(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=500),
-    symbol: Optional[str] = None,
-    strategy: Optional[str] = None,
-    status: Optional[str] = None,
-    action: Optional[str] = None,
-    days: Optional[int] = Query(7)
+    account_id: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db)
 ):
-    """List alerts with filtering"""
-    db = SessionLocal()
+    """
+    ✅ MODIFIED: Filter alerts by account_id
     
+    GET /api/v1/alerts/list?account_id=uuid&limit=100
+    
+    If no account_id, returns all alerts.
+    If account_id provided, returns only that account's alerts.
+    """
     try:
         query = db.query(Alert)
         
-        # Date filter
-        if days:
-            date_from = datetime.utcnow() - timedelta(days=days)
-            query = query.filter(Alert.created_at >= date_from)
+        # ✅ FILTER BY ACCOUNT IF PROVIDED
+        if account_id:
+            query = query.filter(Alert.account_id == account_id)
         
-        # Symbol filter
-        if symbol:
-            query = query.filter(Alert.symbol.ilike(f"%{symbol}%"))
+        alerts = query.order_by(Alert.created_at.desc()).limit(limit).all()
         
-        # Strategy filter
-        if strategy:
-            query = query.filter(Alert.strategy.ilike(f"%{strategy}%"))
-        
-        # Status filter
-        if status:
-            query = query.filter(Alert.status == status)
-        
-        # Action filter
-        if action:
-            query = query.filter(Alert.action == action)
-        
-        # Order by newest
-        alerts = query.order_by(desc(Alert.created_at)).offset(skip).limit(limit).all()
-        
-        logger.info(f"📋 Retrieved {len(alerts)} alerts")
-        return alerts
-        
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "count": len(alerts),
+            "alerts": [
+                {
+                    "id": a.id,
+                    "account_id": a.account_id,
+                    "symbol": a.symbol,
+                    "action": a.action,
+                    "quantity": a.quantity,
+                    "order_type": a.order_type,
+                    "limit_price": a.limit_price,
+                    "status": a.status,
+                    "strategy_id": a.strategy_id,
+                    "strategy": a.strategy,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                    "filled_at": a.filled_at.isoformat() if a.filled_at else None
+                }
+                for a in alerts
+            ]
+        }
+    
     except Exception as e:
-        logger.error(f"❌ Error: {str(e)}")
+        logger.error(f"❌ Error listing alerts: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
 
 @router.get("/{alert_id}")
-async def get_alert(alert_id: str):
-    """Get single alert"""
-    db = SessionLocal()
-    
-    try:
-        alert = db.query(Alert).filter(Alert.id == alert_id).first()
-        
-        if not alert:
-            raise HTTPException(status_code=404, detail=f"Alert not found")
-        
-        return alert
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@router.delete("/{alert_id}")
-async def delete_alert(alert_id: str):
-    """Delete alert"""
-    db = SessionLocal()
-    
+async def get_alert(alert_id: str, db: Session = Depends(get_db)):
+    """
+    GET /api/v1/alerts/{alert_id}
+    Returns a single alert with all details
+    """
     try:
         alert = db.query(Alert).filter(Alert.id == alert_id).first()
         
         if not alert:
             raise HTTPException(status_code=404, detail="Alert not found")
         
-        db.delete(alert)
-        db.commit()
-        
-        logger.info(f"🗑️ Alert deleted: {alert_id}")
-        
-        return {"status": "success", "message": "Alert deleted"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-# ============ ANALYTICS ENDPOINTS ============
-
-@router.get("/stats/overview")
-async def get_alerts_overview(days: int = Query(7)):
-    """Get overview statistics"""
-    db = SessionLocal()
-    
-    try:
-        date_from = datetime.utcnow() - timedelta(days=days)
-        
-        total = db.query(Alert).filter(Alert.created_at >= date_from).count()
-        filled = db.query(Alert).filter(
-            and_(
-                Alert.created_at >= date_from,
-                Alert.status == "FILLED"
-            )
-        ).count()
-        pending = db.query(Alert).filter(
-            and_(
-                Alert.created_at >= date_from,
-                Alert.status == "PENDING"
-            )
-        ).count()
-        failed = db.query(Alert).filter(
-            and_(
-                Alert.created_at >= date_from,
-                Alert.status.in_(["REJECTED", "ERROR"])
-            )
-        ).count()
-        
         return {
             "status": "success",
-            "period_days": days,
-            "total_alerts": total,
-            "filled": filled,
-            "pending": pending,
-            "failed": failed,
-            "success_rate": (filled / total * 100) if total > 0 else 0
-        }
-        
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@router.get("/stats/by-strategy")
-async def get_stats_by_strategy(days: int = Query(7)):
-    """Get stats by strategy"""
-    db = SessionLocal()
-    
-    try:
-        date_from = datetime.utcnow() - timedelta(days=days)
-        
-        strategies = db.query(Alert.strategy).filter(
-            Alert.created_at >= date_from
-        ).distinct().all()
-        
-        results = []
-        for (strategy,) in strategies:
-            if not strategy:
-                continue
-            
-            alerts = db.query(Alert).filter(
-                and_(
-                    Alert.created_at >= date_from,
-                    Alert.strategy == strategy
-                )
-            ).all()
-            
-            total = len(alerts)
-            filled = len([a for a in alerts if a.status == "FILLED"])
-            wins = len([a for a in alerts if a.profit_loss and a.profit_loss > 0])
-            
-            results.append({
-                "strategy": strategy,
-                "total_signals": total,
-                "filled": filled,
-                "success_rate": (filled / total * 100) if total > 0 else 0,
-                "win_rate": (wins / filled * 100) if filled > 0 else 0,
-                "total_profit": sum([a.profit_loss or 0 for a in alerts])
-            })
-        
-        return {
-            "status": "success",
-            "strategies": sorted(results, key=lambda x: x["total_profit"], reverse=True)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@router.get("/stats/by-symbol")
-async def get_stats_by_symbol(days: int = Query(7)):
-    """Get stats by symbol"""
-    db = SessionLocal()
-    
-    try:
-        date_from = datetime.utcnow() - timedelta(days=days)
-        
-        symbols = db.query(Alert.symbol).filter(
-            Alert.created_at >= date_from
-        ).distinct().all()
-        
-        results = []
-        for (symbol,) in symbols:
-            if not symbol:
-                continue
-            
-            alerts = db.query(Alert).filter(
-                and_(
-                    Alert.created_at >= date_from,
-                    Alert.symbol == symbol
-                )
-            ).all()
-            
-            total = len(alerts)
-            filled = len([a for a in alerts if a.status == "FILLED"])
-            wins = len([a for a in alerts if a.profit_loss and a.profit_loss > 0])
-            
-            results.append({
-                "symbol": symbol,
-                "total_signals": total,
-                "filled": filled,
-                "win_rate": (wins / filled * 100) if filled > 0 else 0,
-                "total_profit": sum([a.profit_loss or 0 for a in alerts])
-            })
-        
-        return {
-            "status": "success",
-            "symbols": sorted(results, key=lambda x: x["total_profit"], reverse=True)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-# ============ BULK OPERATIONS ============
-
-@router.delete("/bulk/cleanup")
-async def cleanup_old_alerts(days: int = Query(30)):
-    """Delete old alerts"""
-    db = SessionLocal()
-    
-    try:
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
-        
-        deleted = db.query(Alert).filter(Alert.created_at < cutoff_date).delete()
-        db.commit()
-        
-        logger.info(f"🗑️ Deleted {deleted} alerts")
-        
-        return {
-            "status": "success",
-            "deleted_count": deleted,
-            "older_than_days": days
-        }
-        
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@router.post("/bulk/export")
-async def export_alerts(
-    symbol: Optional[str] = None,
-    strategy: Optional[str] = None,
-    days: int = Query(7)
-):
-    """Export alerts"""
-    db = SessionLocal()
-    
-    try:
-        query = db.query(Alert)
-        
-        if symbol:
-            query = query.filter(Alert.symbol == symbol)
-        if strategy:
-            query = query.filter(Alert.strategy == strategy)
-        
-        date_from = datetime.utcnow() - timedelta(days=days)
-        query = query.filter(Alert.created_at >= date_from)
-        
-        alerts = query.all()
-        
-        export_data = [
-            {
-                "id": a.id,
-                "symbol": a.symbol,
-                "action": a.action,
-                "quantity": a.quantity,
-                "status": a.status,
-                "strategy": a.strategy,
-                "created_at": a.created_at.isoformat(),
-                "profit_loss": a.profit_loss
+            "alert": {
+                "id": alert.id,
+                "account_id": alert.account_id,
+                "symbol": alert.symbol,
+                "action": alert.action,
+                "quantity": alert.quantity,
+                "order_type": alert.order_type,
+                "limit_price": alert.limit_price,
+                "status": alert.status,
+                "strategy_id": alert.strategy_id,
+                "strategy": alert.strategy,
+                "timeframe": alert.timeframe,
+                "signal_strength": alert.signal_strength,
+                "error_message": alert.error_message,
+                "created_at": alert.created_at.isoformat() if alert.created_at else None,
+                "filled_at": alert.filled_at.isoformat() if alert.filled_at else None
             }
-            for a in alerts
-        ]
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ Error fetching alert: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{alert_id}")
+async def update_alert(alert_id: str, status: str, db: Session = Depends(get_db)):
+    """
+    PUT /api/v1/alerts/{alert_id}?status=filled
+    Update alert status
+    """
+    try:
+        alert = db.query(Alert).filter(Alert.id == alert_id).first()
         
-        logger.info(f"📤 Exported {len(alerts)} alerts")
+        if not alert:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        
+        alert.status = status
+        alert.updated_at = datetime.utcnow()
+        
+        if status == "filled":
+            alert.filled_at = datetime.utcnow()
+        
+        db.commit()
+        
+        logger.info(f"✅ Alert {alert_id} updated to {status}")
         
         return {
             "status": "success",
-            "count": len(alerts),
-            "data": export_data
+            "alert_id": alert.id,
+            "message": f"Alert updated to {status}"
         }
-        
+    
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        db.rollback()
+        logger.error(f"❌ Error updating alert: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
