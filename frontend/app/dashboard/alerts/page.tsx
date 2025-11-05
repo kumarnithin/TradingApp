@@ -7,700 +7,368 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface Alert {
   id: string
+  account_id: string
   symbol: string
   action: string
   quantity: number
   status: string
-  strategy?: string
   created_at: string
-  filled_at?: string
   profit_loss?: number
+  strategy?: string
+  account_name?: string
 }
 
-interface AlertStats {
-  total_alerts: number
-  filled: number
-  pending: number
-  failed: number
-  success_rate: number
-}
-
-interface StrategyStats {
-  strategy: string
-  total_signals: number
-  filled: number
-  success_rate: number
-  win_rate: number
-  total_profit: number
+interface Account {
+  id: string
+  account_name: string
 }
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
-  const [stats, setStats] = useState<AlertStats | null>(null)
-  const [strategyStats, setStrategyStats] = useState<StrategyStats[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
+  const [currentAccountId, setCurrentAccountId] = useState<string>('')
+  const [showAllAccounts, setShowAllAccounts] = useState(false)
+  const [isMultiSelect, setIsMultiSelect] = useState(false)
   const [loading, setLoading] = useState(false)
-  
-  // Filters
-  const [filters, setFilters] = useState({
-    symbol: '',
-    strategy: '',
-    status: 'all',
-    days: 7
-  })
+  const [error, setError] = useState('')
 
+  // Fetch accounts on mount
   useEffect(() => {
-    loadAlerts()
-    loadStats()
-    loadStrategyStats()
-    
-    const interval = setInterval(() => {
-      loadAlerts()
-      loadStats()
-    }, 10000) // Refresh every 10 seconds
-    
-    return () => clearInterval(interval)
-  }, [filters])
-
-  const loadAlerts = async () => {
-    try {
-      const params: any = { days: filters.days }
-      if (filters.symbol) params.symbol = filters.symbol
-      if (filters.strategy) params.strategy = filters.strategy
-      if (filters.status !== 'all') params.status = filters.status
-
-      const response = await axios.get(`${API_URL}/api/v1/alerts/list`, { params })
-      if (response.data) {
-        setAlerts(response.data)
+    const fetchAccounts = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/api/v1/accounts/list`)
+        if (response.data.accounts) {
+          setAccounts(response.data.accounts)
+          // Set first account as default
+          if (response.data.accounts.length > 0) {
+            setCurrentAccountId(response.data.accounts[0].id)
+            setSelectedAccounts([response.data.accounts[0].id])
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching accounts:', err)
+        setError('Failed to load accounts')
       }
-    } catch (error) {
-      console.error('Error loading alerts:', error)
+    }
+
+    fetchAccounts()
+  }, [])
+
+  // Fetch alerts whenever selected accounts change
+  useEffect(() => {
+    if (selectedAccounts.length === 0) return
+
+    const fetchAlerts = async () => {
+      setLoading(true)
+      try {
+        // If showing all accounts, fetch all alerts, otherwise fetch for selected accounts
+        const accountsToFetch = showAllAccounts ? accounts.map(a => a.id) : selectedAccounts
+
+        let allAlerts: Alert[] = []
+
+        for (const accountId of accountsToFetch) {
+          const response = await axios.get(`${API_URL}/api/v1/alerts/list`, {
+            params: { account_id: accountId }
+          })
+
+          if (response.data.alerts) {
+            // Find account name and add to each alert
+            const account = accounts.find(a => a.id === accountId)
+            const alertsWithAccountName = response.data.alerts.map((alert: Alert) => ({
+              ...alert,
+              account_name: account?.account_name || 'Unknown'
+            }))
+            allAlerts = [...allAlerts, ...alertsWithAccountName]
+          }
+        }
+
+        // Sort by created_at descending
+        allAlerts.sort((a, b) => {
+          const dateA = new Date(a.created_at).getTime()
+          const dateB = new Date(b.created_at).getTime()
+          return dateB - dateA
+        })
+
+        setAlerts(allAlerts)
+        setError('')
+      } catch (err) {
+        console.error('Error fetching alerts:', err)
+        setError('Failed to load alerts')
+        setAlerts([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAlerts()
+  }, [selectedAccounts, showAllAccounts, accounts])
+
+  const handleAccountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+
+    if (value === 'ALL') {
+      setShowAllAccounts(true)
+      setIsMultiSelect(true)
+      setSelectedAccounts(accounts.map(a => a.id))
+    } else if (value === 'MULTI') {
+      setIsMultiSelect(true)
+      setShowAllAccounts(false)
+    } else {
+      setShowAllAccounts(false)
+      setIsMultiSelect(false)
+      setCurrentAccountId(value)
+      setSelectedAccounts([value])
     }
   }
 
-  const loadStats = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/v1/alerts/stats/overview?days=${filters.days}`
-      )
-      setStats(response.data)
-    } catch (error) {
-      console.error('Error loading stats:', error)
+  const handleMultiSelectChange = (accountId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedAccounts([...selectedAccounts, accountId])
+    } else {
+      setSelectedAccounts(selectedAccounts.filter(id => id !== accountId))
     }
-  }
-
-  const loadStrategyStats = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/v1/alerts/stats/by-strategy?days=${filters.days}`
-      )
-      setStrategyStats(response.data.strategies || [])
-    } catch (error) {
-      console.error('Error loading strategy stats:', error)
-    }
-  }
-
-  const exportAlerts = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/v1/alerts/bulk/export`, {
-        params: { symbol: filters.symbol, strategy: filters.strategy, days: filters.days }
-      })
-      
-      // Download as JSON
-      const dataStr = JSON.stringify(response.data.data, null, 2)
-      const dataBlob = new Blob([dataStr], { type: 'application/json' })
-      const url = URL.createObjectURL(dataBlob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `alerts_export_${new Date().toISOString()}.json`
-      link.click()
-    } catch (error) {
-      console.error('Error exporting alerts:', error)
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'FILLED': return '#10b981'
-      case 'PENDING': return '#f59e0b'
-      case 'REJECTED': return '#ef4444'
-      case 'ERROR': return '#ef4444'
-      default: return '#6b7280'
-    }
-  }
-
-  const getActionColor = (action: string) => {
-    return action === 'BUY' ? '#10b981' : '#ef4444'
-  }
-
-  const getProfitColor = (profit: number | undefined) => {
-    if (!profit) return '#6b7280'
-    return profit > 0 ? '#10b981' : '#ef4444'
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-          📊 Alert Database Dashboard
-        </h1>
-        <p style={{ color: '#666' }}>Track all TradingView signals with persistent database storage</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Alerts</h1>
+          <p className="text-gray-400 text-sm mt-2">
+            Track all TradingView signals with persistent database storage
+          </p>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      {stats && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '1rem',
-          marginBottom: '2rem'
-        }}>
-          <div style={{
-            background: '#f3f4f6',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            border: '1px solid #e5e7eb'
-          }}>
-            <div style={{ fontSize: '0.9rem', color: '#666' }}>Total Alerts</div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
-              {stats.total_alerts}
-            </div>
-          </div>
+      {/* Account Selector */}
+      <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+        <label className="text-white text-sm font-medium mb-2 block">Select Account(s)</label>
 
-          <div style={{
-            background: '#dbeafe',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            border: '1px solid #93c5fd'
-          }}>
-            <div style={{ fontSize: '0.9rem', color: '#1e40af' }}>Filled</div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#1e40af' }}>
-              {stats.filled}
-            </div>
-          </div>
-
-          <div style={{
-            background: '#fef3c7',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            border: '1px solid #fcd34d'
-          }}>
-            <div style={{ fontSize: '0.9rem', color: '#92400e' }}>Pending</div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#92400e' }}>
-              {stats.pending}
-            </div>
-          </div>
-
-          <div style={{
-            background: '#fee2e2',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            border: '1px solid #fca5a5'
-          }}>
-            <div style={{ fontSize: '0.9rem', color: '#7f1d1d' }}>Failed</div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#7f1d1d' }}>
-              {stats.failed}
-            </div>
-          </div>
-
-          <div style={{
-            background: '#d1fae5',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            border: '1px solid #6ee7b7'
-          }}>
-            <div style={{ fontSize: '0.9rem', color: '#065f46' }}>Success Rate</div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#065f46' }}>
-              {stats.success_rate.toFixed(1)}%
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Strategy Performance */}
-      {strategyStats.length > 0 && (
-        <div style={{
-          background: 'white',
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          padding: '1.5rem',
-          marginBottom: '2rem'
-        }}>
-          <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 'bold' }}>
-            📈 Strategy Performance
-          </h2>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ textAlign: 'left', padding: '1rem' }}>Strategy</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Total Signals</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Filled</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Success %</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Win Rate %</th>
-                  <th style={{ textAlign: 'right', padding: '1rem' }}>Total Profit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {strategyStats.map((s) => (
-                  <tr key={s.strategy} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>{s.strategy}</td>
-                    <td style={{ textAlign: 'center', padding: '1rem' }}>{s.total_signals}</td>
-                    <td style={{ textAlign: 'center', padding: '1rem' }}>{s.filled}</td>
-                    <td style={{ textAlign: 'center', padding: '1rem' }}>
-                      {s.success_rate.toFixed(1)}%
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '1rem' }}>
-                      <span style={{ color: s.win_rate > 50 ? '#10b981' : '#ef4444' }}>
-                        {s.win_rate.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td style={{
-                      textAlign: 'right',
-                      padding: '1rem',
-                      color: getProfitColor(s.total_profit),
-                      fontWeight: 'bold'
-                    }}>
-                      ${s.total_profit.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div style={{
-        background: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '1.5rem',
-        marginBottom: '2rem'
-      }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', fontWeight: 'bold' }}>🔍 Filters</h2>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: '1rem'
-        }}>
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Symbol
-            </label>
-            <input
-              type="text"
-              value={filters.symbol}
-              onChange={(e) => setFilters({ ...filters, symbol: e.target.value })}
-              placeholder="e.g., AAPL"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Strategy
-            </label>
-            <input
-              type="text"
-              value={filters.strategy}
-              onChange={(e) => setFilters({ ...filters, strategy: e.target.value })}
-              placeholder="e.g., RSI"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Status
-            </label>
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            >
-              <option value="all">All</option>
-              <option value="FILLED">Filled</option>
-              <option value="PENDING">Pending</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="ERROR">Error</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Period (Days)
-            </label>
-            <input
-              type="number"
-              value={filters.days}
-              onChange={(e) => setFilters({ ...filters, days: parseInt(e.target.value) })}
-              min="1"
-              max="365"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={exportAlerts}
-          style={{
-            marginTop: '1rem',
-            padding: '0.75rem 1.5rem',
-            background: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            fontWeight: 'bold',
-            cursor: 'pointer'
-          }}
-        >
-          📥 Export as JSON
-        </button>
-      </div>
-
-      {/* Alerts Table */}
-      <div style={{
-        background: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '1.5rem'
-      }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', fontWeight: 'bold' }}>
-          📋 Alert History ({alerts.length})
-        </h2>
-        
-        {alerts.length > 0 ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ textAlign: 'left', padding: '1rem' }}>Time</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Symbol</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Action</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Qty</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Strategy</th>
-                  <th style={{ textAlign: 'center', padding: '1rem' }}>Status</th>
-                  <th style={{ textAlign: 'right', padding: '1rem' }}>P&L</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alerts.map((alert) => (
-                  <tr key={alert.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '1rem', fontSize: '0.9rem' }}>
-                      {new Date(alert.created_at).toLocaleString()}
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '1rem', fontWeight: 'bold' }}>
-                      {alert.symbol}
-                    </td>
-                    <td style={{
-                      textAlign: 'center',
-                      padding: '1rem',
-                      color: getActionColor(alert.action),
-                      fontWeight: 'bold'
-                    }}>
-                      {alert.action}
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '1rem' }}>
-                      {alert.quantity}
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '1rem', fontSize: '0.9rem', color: '#666' }}>
-                      {alert.strategy || '-'}
-                    </td>
-                    <td style={{
-                      textAlign: 'center',
-                      padding: '1rem',
-                      color: getStatusColor(alert.status),
-                      fontWeight: 'bold'
-                    }}>
-                      {alert.status}
-                    </td>
-                    <td style={{
-                      textAlign: 'right',
-                      padding: '1rem',
-                      color: getProfitColor(alert.profit_loss),
-                      fontWeight: 'bold'
-                    }}>
-                      {alert.profit_loss ? `$${alert.profit_loss.toFixed(2)}` : '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {!isMultiSelect ? (
+          <select
+            value={showAllAccounts ? 'ALL' : currentAccountId}
+            onChange={handleAccountChange}
+            className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+          >
+            <option value="">-- Select Account --</option>
+            {accounts.map(account => (
+              <option key={account.id} value={account.id}>
+                {account.account_name}
+              </option>
+            ))}
+            <option value="MULTI">Multiple Accounts...</option>
+            <option value="ALL">All Accounts</option>
+          </select>
         ) : (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
-            No alerts found
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setIsMultiSelect(false)
+                  setShowAllAccounts(false)
+                  if (accounts.length > 0) {
+                    setCurrentAccountId(accounts[0].id)
+                    setSelectedAccounts([accounts[0].id])
+                  }
+                }}
+                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+              >
+                Single Account
+              </button>
+              <button
+                onClick={() => {
+                  setShowAllAccounts(true)
+                  setSelectedAccounts(accounts.map(a => a.id))
+                }}
+                className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+              >
+                All Accounts
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {accounts.map(account => (
+                <label key={account.id} className="flex items-center gap-2 text-white">
+                  <input
+                    type="checkbox"
+                    checked={selectedAccounts.includes(account.id)}
+                    onChange={e => handleMultiSelectChange(account.id, e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  {account.account_name}
+                </label>
+              ))}
+            </div>
           </div>
         )}
       </div>
-    </div>
-  )
-}
 
-'use client'
-
-import { useEffect, useState } from 'react'
-import axios from 'axios'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-export default function AlertsPage() {
-  // ===== STATE VARIABLES =====
-  const [alerts, setAlerts] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  
-  // Account filter states
-  const [currentAccountId, setCurrentAccountId] = useState<string | null>(null)
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
-  const [showAllAccounts, setShowAllAccounts] = useState(false)
-  const [isMultiSelect, setIsMultiSelect] = useState(false)
-
-  // ===== LOAD FILTER STATE FROM LOCALSTORAGE =====
-  useEffect(() => {
-    console.log('🔄 Loading filter state from localStorage...')
-    
-    const savedShowAll = localStorage.getItem('showAllAccounts')
-    const savedAccountId = localStorage.getItem('currentAccountId')
-    const savedSelectedAccounts = localStorage.getItem('selectedAccounts')
-    const savedIsMultiSelect = localStorage.getItem('isMultiSelectMode')
-
-    console.log('Saved values:', {
-      showAll: savedShowAll,
-      accountId: savedAccountId,
-      selectedAccounts: savedSelectedAccounts,
-      isMultiSelect: savedIsMultiSelect
-    })
-
-    if (savedIsMultiSelect === 'true' && savedSelectedAccounts) {
-      console.log('✅ Setting Multi-Select mode')
-      setIsMultiSelect(true)
-      setSelectedAccounts(JSON.parse(savedSelectedAccounts))
-      setShowAllAccounts(false)
-      setCurrentAccountId(null)
-    } else if (savedShowAll === 'true') {
-      console.log('✅ Setting All Accounts mode')
-      setShowAllAccounts(true)
-      setSelectedAccounts([])
-      setIsMultiSelect(false)
-      setCurrentAccountId(null)
-    } else if (savedAccountId) {
-      console.log('✅ Setting Single Account mode:', savedAccountId)
-      setCurrentAccountId(savedAccountId)
-      setShowAllAccounts(false)
-      setSelectedAccounts([])
-      setIsMultiSelect(false)
-    }
-  }, []) // Run only once on mount
-
-  // ===== LISTEN FOR ACCOUNT CHANGES FROM SWITCHER =====
-  useEffect(() => {
-    console.log('📡 Registering accountChanged event listener')
-
-    const handleAccountChange = (event: any) => {
-      console.log('📩 Received accountChanged event:', event.detail)
-      
-      const { account, showAll, selectedAccounts: selected, isMultiSelect: multiSelect } = event.detail
-
-      if (multiSelect && selected && selected.length > 0) {
-        console.log('✅ Multi-Select event received:', selected)
-        setIsMultiSelect(true)
-        setSelectedAccounts(selected)
-        setShowAllAccounts(false)
-        setCurrentAccountId(null)
-      } else if (showAll) {
-        console.log('✅ All Accounts event received')
-        setShowAllAccounts(true)
-        setSelectedAccounts([])
-        setIsMultiSelect(false)
-        setCurrentAccountId(null)
-      } else if (account) {
-        console.log('✅ Single Account event received:', account.id)
-        setCurrentAccountId(account.id)
-        setShowAllAccounts(false)
-        setSelectedAccounts([])
-        setIsMultiSelect(false)
-      }
-    }
-
-    window.addEventListener('accountChanged', handleAccountChange)
-
-    return () => {
-      console.log('🧹 Cleaning up event listener')
-      window.removeEventListener('accountChanged', handleAccountChange)
-    }
-  }, [])
-
-  // ===== LOAD ALERTS WHENEVER FILTER CHANGES =====
-  useEffect(() => {
-    console.log('🔄 Filter changed, loading alerts...')
-    console.log('Current state:', {
-      currentAccountId,
-      selectedAccounts,
-      showAllAccounts,
-      isMultiSelect
-    })
-    loadAlerts()
-  }, [currentAccountId, selectedAccounts, showAllAccounts, isMultiSelect])
-
-  // ===== LOAD ALERTS FROM API =====
-  const loadAlerts = async () => {
-    try {
-      setLoading(true)
-      
-      // BUILD THE API URL
-      let url = `${API_URL}/api/v1/alerts/list`
-
-      if (isMultiSelect && selectedAccounts.length > 0) {
-        // MULTI-SELECT MODE: Send multiple account IDs
-        const accountIds = selectedAccounts.join(',')
-        url += `?account_ids=${accountIds}`
-        console.log(`📋 Multi-select mode - Loading alerts for accounts: ${accountIds}`)
-      } else if (!showAllAccounts && currentAccountId) {
-        // SINGLE ACCOUNT MODE: Send single account ID
-        url += `?account_id=${currentAccountId}`
-        console.log(`📋 Single account mode - Loading alerts for account: ${currentAccountId}`)
-      } else if (showAllAccounts) {
-        // ALL ACCOUNTS MODE: No filter
-        console.log('📋 All accounts mode - Loading alerts for all accounts')
-      }
-
-      console.log('🌐 Fetching from:', url)
-      
-      const response = await axios.get(url)
-      console.log('✅ Response received:', response.data)
-      
-      setAlerts(response.data.alerts || [])
-      setLoading(false)
-    } catch (error) {
-      console.error('❌ Error loading alerts:', error)
-      setLoading(false)
-    }
-  }
-
-  // ===== RENDER =====
-  return (
-    <div style={{ padding: '2rem' }}>
-      <h1>Alerts</h1>
-
-      {/* FILTER INDICATOR */}
-      <div style={{
-        padding: '0.75rem 1rem',
-        background: isMultiSelect 
-          ? '#8b5cf6'  // Purple for multi
-          : (showAllAccounts ? '#3b82f6' : '#10b981'),  // Blue for all, Green for single
-        color: 'white',
-        borderRadius: '8px',
-        marginBottom: '2rem',
-        display: 'inline-block',
-        fontWeight: '600',
-        fontSize: '1rem'
-      }}>
-        {isMultiSelect
-          ? `✅ ${selectedAccounts.length} Account${selectedAccounts.length !== 1 ? 's' : ''} Selected`
-          : showAllAccounts
-            ? '📊 All Accounts'
-            : '🏢 Single Account'
-        }
-      </div>
-
-      {/* LOADING STATE */}
-      {loading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading alerts...</div>}
-
-      {/* ALERTS TABLE */}
-      {!loading && (
-        <div>
-          {alerts.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '2rem',
-              background: '#1e293b',
-              borderRadius: '8px',
-              color: '#94a3b8'
-            }}>
-              No alerts found for selected filter
-            </div>
-          ) : (
-            <table style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              background: '#1e293b',
-              borderRadius: '8px',
-              overflow: 'hidden'
-            }}>
-              <thead>
-                <tr style={{ background: '#0f172a', borderBottom: '2px solid #334155' }}>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Symbol</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Action</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Quantity</th>
-                  {(showAllAccounts || isMultiSelect) && (
-                    <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Account</th>
-                  )}
-                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Status</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: '#e2e8f0' }}>Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alerts.map((alert: any, index: number) => (
-                  <tr
-                    key={alert.id}
-                    style={{
-                      borderBottom: index < alerts.length - 1 ? '1px solid #334155' : 'none',
-                      background: index % 2 === 0 ? 'transparent' : '#0f172a30'
-                    }}
-                  >
-                    <td style={{ padding: '1rem', color: '#e2e8f0' }}>{alert.symbol}</td>
-                    <td style={{ padding: '1rem', color: '#e2e8f0' }}>{alert.action}</td>
-                    <td style={{ padding: '1rem', color: '#e2e8f0' }}>{alert.quantity}</td>
-                    {(showAllAccounts || isMultiSelect) && (
-                      <td style={{ padding: '1rem', color: '#60a5fa' }}>{alert.account_name}</td>
-                    )}
-                    <td style={{ padding: '1rem', color: '#10b981' }}>{alert.status}</td>
-                    <td style={{ padding: '1rem', color: '#94a3b8' }}>
-                      {new Date(alert.created_at).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      {/* Loading and Error States */}
+      {loading && (
+        <div className="bg-blue-900 text-blue-200 p-4 rounded-lg">
+          Loading alerts...
         </div>
       )}
 
-      {/* DEBUG INFO (Remove later) */}
-      <details style={{ marginTop: '2rem', padding: '1rem', background: '#0f172a', borderRadius: '8px' }}>
-        <summary style={{ cursor: 'pointer', color: '#94a3b8', fontWeight: 'bold' }}>Debug Info</summary>
-        <pre style={{ color: '#60a5fa', overflow: 'auto', marginTop: '1rem' }}>
-          {JSON.stringify({
-            currentAccountId,
-            selectedAccounts,
-            showAllAccounts,
-            isMultiSelect,
-            alertsCount: alerts.length
-          }, null, 2)}
-        </pre>
-      </details>
+      {error && (
+        <div className="bg-red-900 text-red-200 p-4 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      {/* Summary Statistics */}
+      {alerts.length > 0 && (
+        <div className="grid grid-cols-4 gap-4">
+          <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+            <p className="text-gray-400 text-sm">Total Alerts</p>
+            <p className="text-2xl font-bold text-white mt-1">{alerts.length}</p>
+          </div>
+          <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+            <p className="text-gray-400 text-sm">Active</p>
+            <p className="text-2xl font-bold text-yellow-400 mt-1">
+              {alerts.filter(a => a.status === 'pending').length}
+            </p>
+          </div>
+          <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+            <p className="text-gray-400 text-sm">Filled</p>
+            <p className="text-2xl font-bold text-green-400 mt-1">
+              {alerts.filter(a => a.status === 'filled').length}
+            </p>
+          </div>
+          <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+            <p className="text-gray-400 text-sm">Failed</p>
+            <p className="text-2xl font-bold text-red-400 mt-1">
+              {alerts.filter(a => a.status === 'failed').length}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Alerts Table */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-900 border-b border-gray-700">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                  Time
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                  Symbol
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                  Action
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                  Qty
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                  Strategy
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                  Status
+                </th>
+                {(showAllAccounts || isMultiSelect) && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                    Account
+                  </th>
+                )}
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                  P&L
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-700">
+              {alerts.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                    {loading ? 'Loading alerts...' : 'No alerts found'}
+                  </td>
+                </tr>
+              ) : (
+                alerts.map(alert => (
+                  <tr key={alert.id} className="hover:bg-gray-750 transition">
+                    <td className="px-4 py-3 text-sm text-white">
+                      {new Date(alert.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-blue-400">
+                      {alert.symbol}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${
+                          alert.action === 'BUY'
+                            ? 'bg-green-900 text-green-200'
+                            : 'bg-red-900 text-red-200'
+                        }`}
+                      >
+                        {alert.action}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-white">{alert.quantity}</td>
+                    <td className="px-4 py-3 text-sm text-gray-300">
+                      {alert.strategy || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${
+                          alert.status === 'pending'
+                            ? 'bg-yellow-900 text-yellow-200'
+                            : alert.status === 'filled'
+                              ? 'bg-green-900 text-green-200'
+                              : 'bg-red-900 text-red-200'
+                        }`}
+                      >
+                        {alert.status}
+                      </span>
+                    </td>
+                    {(showAllAccounts || isMultiSelect) && (
+                      <td className="px-4 py-3 text-sm text-gray-300">
+                        {alert.account_name}
+                      </td>
+                    )}
+                    <td className="px-4 py-3 text-sm font-semibold">
+                      <span
+                        className={
+                          alert.profit_loss && alert.profit_loss > 0
+                            ? 'text-green-400'
+                            : alert.profit_loss && alert.profit_loss < 0
+                              ? 'text-red-400'
+                              : 'text-white'
+                        }
+                      >
+                        {alert.profit_loss ? `$${alert.profit_loss.toFixed(2)}` : '-'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Debug Info */}
+      <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+        <details className="text-gray-400 text-xs">
+          <summary className="cursor-pointer hover:text-gray-300">Debug Info</summary>
+          <pre className="mt-2 text-gray-500 overflow-auto max-h-40">
+            {JSON.stringify(
+              {
+                currentAccountId,
+                selectedAccounts,
+                showAllAccounts,
+                isMultiSelect,
+                alertsCount: alerts.length
+              },
+              null,
+              2
+            )}
+          </pre>
+        </details>
+      </div>
     </div>
   )
 }
