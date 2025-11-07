@@ -20,7 +20,7 @@ const navigation = [
   { name: 'LIT Suite', href: '/dashboard/lit', icon: '🎯' },
   { name: 'Tools', href: '/dashboard/tools', icon: '🛠️', },
   { name: 'Advanced Tools', href: '/dashboard/advanced-tools', icon: '⚡',},
-  { name: 'Pre-Trade', href: '/dashboard/pretrade', icon: '📋', }
+  { name: 'Trading Discipline', href: '/dashboard/pretrade', icon: '📋', }
 
 ]
 

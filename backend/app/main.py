@@ -15,8 +15,7 @@ from app.services import advanced_tools
 from app.routes.api.v1 import advanced_tools as adv_tools_routes
 # In /backend/app/main.py
 from app.routes.api.v1 import pretrade
-
-
+from app.routes.api.v1 import trading_discipline
 
 
 load_dotenv()
@@ -63,6 +62,7 @@ try:
     app.include_router(tools.router, prefix="/api/v1/tools")
     app.include_router(adv_tools_routes.router, prefix="/api/v1/advanced-tools")
     app.include_router(pretrade.router, prefix="/api/v1/pretrade")
+    app.include_router(trading_discipline.router, prefix="/api/v1/trading-discipline", tags=["Trading Discipline"])
     
 
     
@@ -76,6 +76,7 @@ try:
     logger.info(" - Tools router: /api/v1/tools/*")  
     logger.info(" - Advanced Tools router: /api/v1/advanced-tools/*")
     logger.info(" - Pretrade Tools router: /api/v1/pretrade/*")
+    logger.info(" - Trading Discipline router: /api/v1/trading_discipline/*")
     
 except Exception as e:
     logger.error(f"❌ Error importing routers: {str(e)}")
