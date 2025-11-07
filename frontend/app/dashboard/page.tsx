@@ -1,191 +1,284 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import axios from 'axios'
-import StatCard from '@/components/StatCard'
-import styles from './page.module.css'
+import styles from './dashboard.module.css'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-interface AccountStats {
-  balance: number
-  daily_profit: number
-  win_rate: number
-  total_trades: number
-  open_positions: number
+interface AccountData {
+  id: string
+  account_name: string
+  account_type: string
+  status?: string
 }
 
-interface Trade {
-  id: number
+interface SignalData {
+  id: string
   symbol: string
-  action: string
+  strategy_id?: string
   quantity: number
-  entry_price: number | null
-  profit_loss: number
-  status: string
-  created_at: string
+  created_at?: string
 }
 
-interface Signal {
-  id: number
+interface TradeData {
+  id: string
   symbol: string
-  action: string
   quantity: number
-  status: string
-  received_at: string
-  strategy_id: string
+  profit_loss?: number
+  status?: string
 }
 
-export default function Dashboard() {
-  const [stats, setStats] = useState<AccountStats>({
-    balance: 0,
-    daily_profit: 0,
-    win_rate: 0,
-    total_trades: 0,
-    open_positions: 0
-  })
-  const [trades, setTrades] = useState<Trade[]>([])
-  const [signals, setSignals] = useState<Signal[]>([])
+export default function DashboardPage() {
+  const router = useRouter()
+  const [accounts, setAccounts] = useState<AccountData[]>([])
+  const [signals, setSignals] = useState<SignalData[]>([])
+  const [trades, setTrades] = useState<TradeData[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('all')
 
+  // Fetch all data
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+
+        // Fetch accounts
+        try {
+          const accountsRes = await axios.get(`${API_URL}/api/v1/accounts/list`)
+          if (accountsRes.data.accounts) {
+            setAccounts(accountsRes.data.accounts)
+          }
+        } catch (e) {
+          console.error('Error fetching accounts:', e)
+        }
+
+        // Fetch signals
+        try {
+          const signalsRes = await axios.get(`${API_URL}/api/v1/signals/list`)
+          if (signalsRes.data.signals) {
+            setSignals(signalsRes.data.signals.slice(0, 5)) // Last 5
+          }
+        } catch (e) {
+          console.error('Error fetching signals:', e)
+        }
+
+        // Fetch trades
+        try {
+          const tradesRes = await axios.get(`${API_URL}/api/v1/trades/list`)
+          if (tradesRes.data.trades) {
+            setTrades(tradesRes.data.trades.slice(0, 5)) // Last 5
+          }
+        } catch (e) {
+          console.error('Error fetching trades:', e)
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
     fetchData()
-    const interval = setInterval(fetchData, 5000)
-    return () => clearInterval(interval)
   }, [])
 
-  const fetchData = async () => {
-    try {
-      const [statsRes, tradesRes, signalsRes] = await Promise.all([
-        axios.get(`${API_URL}/api/v1/account/stats`),
-        axios.get(`${API_URL}/api/v1/orders?limit=10`),
-        axios.get(`${API_URL}/api/v1/webhook/signals?limit=10`)
-      ])
+  // ✅ KEY FIX: Handle account selection with proper navigation
+  const handleAccountSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    console.log('📍 Account selected:', value)
 
-      setStats(statsRes.data)
-      setTrades(tradesRes.data)
-      setSignals(signalsRes.data)
-      setLoading(false)
-    } catch (error) {
-      console.error('Error fetching data:', error)
-      setLoading(false)
+    if (value === 'all' || value === '') {
+      // Show all accounts
+      setSelectedAccountId('all')
+      router.push('/dashboard/accounts')
+    } else if (value === 'manage') {
+      // Go to manage accounts (no filter)
+      setSelectedAccountId('all')
+      router.push('/dashboard/accounts')
+    } else {
+      // Filter to specific account
+      setSelectedAccountId(value)
+      console.log('🔗 Navigating to:', `/dashboard/accounts?account_id=${value}`)
+      router.push(`/dashboard/accounts?account_id=${value}`)
     }
   }
 
-  if (loading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner}></div>
-        <p>Loading dashboard...</p>
-      </div>
-    )
-  }
-
   return (
-    <div className={styles.dashboard}>
-      {/* Stats Grid */}
-      <div className={styles.statsGrid}>
-        <StatCard
-          title="Account Balance"
-          value={`$${stats.balance.toLocaleString()}`}
-          change={2.5}
-          icon="💰"
-          gradient="gradientBlue"
-        />
-        <StatCard
-          title="Daily P&L"
-          value={`${stats.daily_profit >= 0 ? '+' : ''}$${stats.daily_profit.toLocaleString()}`}
-          change={stats.daily_profit >= 0 ? 5.2 : -3.1}
-          icon="📊"
-          gradient={stats.daily_profit >= 0 ? 'gradientGreen' : 'gradientRed'}
-        />
-        <StatCard
-          title="Win Rate"
-          value={`${stats.win_rate.toFixed(1)}%`}
-          icon="🎯"
-          gradient="gradientPurple"
-        />
-        <StatCard
-          title="Total Trades"
-          value={stats.total_trades.toString()}
-          icon="📈"
-          gradient="gradientOrange"
-        />
-        <StatCard
-          title="Open Positions"
-          value={stats.open_positions.toString()}
-          icon="🔥"
-          gradient="gradientBlue"
-        />
+    <div style={{ padding: '24px', minHeight: '100vh', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', color: '#fff' }}>
+      {/* Header with Dropdown */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', borderBottom: '1px solid #334155', paddingBottom: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '32px', fontWeight: 700, margin: '0 0 8px 0', color: '#f1f5f9' }}>Dashboard</h1>
+          <p style={{ fontSize: '14px', color: '#cbd5e1', margin: 0 }}>Real-time trading overview and analytics</p>
+        </div>
+
+        {/* ✅ ACCOUNT SELECTOR DROPDOWN - FIXED */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{ fontSize: '14px', fontWeight: 600, color: '#cbd5e1' }}>Select Account:</label>
+          <select 
+            value={selectedAccountId}
+            onChange={handleAccountSelect}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '6px',
+              border: '1px solid #3b82f6',
+              background: '#0f172a',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500,
+              minWidth: '200px'
+            }}
+          >
+            <option value="all">📊 All Accounts</option>
+            <option disabled>─────────────</option>
+            
+            {/* Account options */}
+            {accounts.map(account => (
+              <option key={account.id} value={account.id}>
+                {account.account_name} ({account.account_type})
+                {account.status === 'connected' ? ' 🟢' : ''}
+              </option>
+            ))}
+
+            <option disabled>─────────────</option>
+            <option value="manage">🔧 Manage Accounts</option>
+          </select>
+        </div>
       </div>
 
-      {/* Activity Section */}
-      <div className={styles.activityGrid}>
+      {/* Stats Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
+        {/* Total Accounts */}
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginBottom: '8px' }}>TOTAL ACCOUNTS</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#3b82f6' }}>{accounts.length}</div>
+        </div>
+
+        {/* Active Accounts */}
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginBottom: '8px' }}>CONNECTED</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#10b981' }}>
+            {accounts.filter(a => a.status === 'connected').length}
+          </div>
+        </div>
+
         {/* Recent Signals */}
-        <div className={`${styles.panel} glass-light`}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>Recent Signals</h2>
-            <span className={styles.badge}>{signals.length}</span>
-          </div>
-          <div className={styles.panelContent}>
-            {signals.length > 0 ? (
-              signals.slice(0, 5).map((signal) => (
-                <div key={signal.id} className={styles.listItem}>
-                  <div className={styles.itemLeft}>
-                    <div className={`${styles.statusDot} ${signal.status === 'EXECUTED' ? styles.dotGreen : signal.status === 'PENDING' ? styles.dotYellow : styles.dotRed}`}></div>
-                    <div>
-                      <p className={styles.itemTitle}>{signal.symbol}</p>
-                      <p className={styles.itemSubtitle}>{signal.strategy_id}</p>
-                    </div>
-                  </div>
-                  <div className={styles.itemRight}>
-                    <span className={`${styles.actionBadge} ${signal.action === 'BUY' ? styles.badgeBuy : styles.badgeSell}`}>
-                      {signal.action}
-                    </span>
-                    <p className={styles.itemQuantity}>{signal.quantity} shares</p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className={styles.emptyState}>
-                <p>No signals yet</p>
-              </div>
-            )}
-          </div>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginBottom: '8px' }}>RECENT SIGNALS</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#f59e0b' }}>{signals.length}</div>
         </div>
 
         {/* Recent Trades */}
-        <div className={`${styles.panel} glass-light`}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>Recent Trades</h2>
-            <span className={styles.badge}>{trades.length}</span>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginBottom: '8px' }}>RECENT TRADES</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#8b5cf6' }}>{trades.length}</div>
+        </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        {/* Recent Signals */}
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📡 Recent Signals</span>
+            <button 
+              onClick={() => router.push('/dashboard/signals')}
+              style={{ fontSize: '12px', color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+            >
+              View All →
+            </button>
           </div>
-          <div className={styles.panelContent}>
-            {trades.length > 0 ? (
-              trades.slice(0, 5).map((trade) => (
-                <div key={trade.id} className={styles.listItem}>
-                  <div className={styles.itemLeft}>
-                    <div className={`${styles.statusDot} ${trade.status === 'FILLED' ? styles.dotBlue : styles.dotYellow}`}></div>
-                    <div>
-                      <p className={styles.itemTitle}>{trade.symbol}</p>
-                      <p className={styles.itemSubtitle}>{trade.quantity} shares</p>
-                    </div>
+
+          {loading ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>Loading signals...</div>
+          ) : signals.length === 0 ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>No signals yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {signals.map(signal => (
+                <div key={signal.id} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>{signal.symbol}</div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{signal.quantity} shares</div>
                   </div>
-                  <div className={styles.itemRight}>
-                    <p className={`${styles.pnlValue} ${trade.profit_loss >= 0 ? styles.pnlPositive : styles.pnlNegative}`}>
-                      ${trade.profit_loss.toFixed(2)}
-                    </p>
-                    <p className={styles.itemStatus}>{trade.status}</p>
+                  <div style={{ fontSize: '12px', color: '#cbd5e1' }}>Strategy ID: {signal.strategy_id || '-'}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Trades */}
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>💰 Recent Trades</span>
+            <button 
+              onClick={() => router.push('/dashboard/trades')}
+              style={{ fontSize: '12px', color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+            >
+              View All →
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>Loading trades...</div>
+          ) : trades.length === 0 ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>No trades yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {trades.map(trade => (
+                <div key={trade.id} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>{trade.symbol}</div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{trade.quantity} shares</div>
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: trade.profit_loss && trade.profit_loss >= 0 ? '#10b981' : '#ef4444' }}>
+                    {trade.profit_loss ? `$${trade.profit_loss.toFixed(2)}` : '-'}
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className={styles.emptyState}>
-                <p>No trades yet</p>
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Accounts Overview */}
+      <div style={{ marginTop: '24px', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px' }}>
+        <div style={{ fontSize: '16px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>📊 Accounts Overview</span>
+          <button 
+            onClick={() => router.push('/dashboard/accounts')}
+            style={{ fontSize: '12px', color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+          >
+            Manage All →
+          </button>
+        </div>
+
+        {loading ? (
+          <div style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>Loading accounts...</div>
+        ) : accounts.length === 0 ? (
+          <div style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>
+            <p>No accounts found. <button onClick={() => router.push('/dashboard/accounts')} style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Create one</button></p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
+            {accounts.map(account => (
+              <div key={account.id} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>{account.account_name}</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>Type: {account.account_type?.toUpperCase() || 'N/A'}</div>
+                <div style={{ fontSize: '12px', color: account.status === 'connected' ? '#10b981' : '#f59e0b' }}>
+                  Status: {account.status === 'connected' ? '🟢 Connected' : account.status === 'created' ? '🟡 Created' : '⚪ Disconnected'}
+                </div>
+                <button
+                  onClick={() => router.push(`/dashboard/accounts?account_id=${account.id}`)}
+                  style={{ marginTop: '8px', padding: '6px 12px', background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+                >
+                  View Details
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

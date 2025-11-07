@@ -26,6 +26,7 @@ export default function PortfolioPage() {
   const [symbols, setSymbols] = useState<Symbol[]>([])
   const [filteredSymbols, setFilteredSymbols] = useState<Symbol[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [priceUpdateStatus, setPriceUpdateStatus] = useState('Auto-update: OFF')
 
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -40,6 +41,7 @@ export default function PortfolioPage() {
   const [newSymbolName, setNewSymbolName] = useState('')
 
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
+  const [autoUpdate, setAutoUpdate] = useState(false)
 
   useEffect(() => {
     fetchCategories()
@@ -56,6 +58,24 @@ export default function PortfolioPage() {
     )
   }, [searchQuery, symbols])
 
+  // Real-time price updates - every 10 seconds
+  useEffect(() => {
+    if (!autoUpdate || !activeCategory) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/v1/portfolio/categories/${activeCategory}/symbols-with-prices`)
+        setSymbols(res.data.symbols || [])
+        setFilteredSymbols(res.data.symbols || [])
+        setPriceUpdateStatus(`Auto-update: ON (${new Date().toLocaleTimeString()})`)
+      } catch (e) {
+        console.error('Price update error:', e)
+      }
+    }, 10000) // Update every 10 seconds
+
+    return () => clearInterval(interval)
+  }, [autoUpdate, activeCategory])
+
   const fetchCategories = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/v1/portfolio/categories`)
@@ -70,13 +90,61 @@ export default function PortfolioPage() {
 
   const fetchSymbols = async (categoryId: string) => {
     try {
-      const res = await axios.get(`${API_URL}/api/v1/portfolio/categories/${categoryId}/symbols`)
+      const res = await axios.get(`${API_URL}/api/v1/portfolio/categories/${categoryId}/symbols-with-prices`)
       setSymbols(res.data.symbols || [])
       setFilteredSymbols(res.data.symbols || [])
       setSearchQuery('')
     } catch (e) {
       console.error(e)
     }
+  }
+
+  const handleExportCSV = async () => {
+    if (!activeCategory) {
+      alert('Select a watchlist first')
+      return
+    }
+    try {
+      const res = await axios.get(`${API_URL}/api/v1/portfolio/categories/${activeCategory}/export`)
+      
+      // Create blob and download
+      const element = document.createElement('a')
+      const file = new Blob([res.data.csv_data], { type: 'text/csv' })
+      element.href = URL.createObjectURL(file)
+      element.download = res.data.filename
+      document.body.appendChild(element)
+      element.click()
+      document.body.removeChild(element)
+      
+      alert('CSV exported successfully!')
+    } catch (e) {
+      alert('Failed to export CSV')
+    }
+  }
+
+  const handleImportCSV = async (event: any) => {
+    const file = event.target.files?.[0]
+    if (!file || !activeCategory) {
+      alert('Select a watchlist and CSV file')
+      return
+    }
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const res = await axios.post(
+        `${API_URL}/api/v1/portfolio/categories/${activeCategory}/import`,
+        formData
+      )
+      
+      alert(`Imported ${res.data.added} symbols, skipped ${res.data.skipped}`)
+      await fetchSymbols(activeCategory)
+    } catch (e) {
+      alert('Failed to import CSV')
+    }
+    
+    event.target.value = ''
   }
 
   const handleCreateCategory = async () => {
@@ -174,11 +242,11 @@ export default function PortfolioPage() {
           Portfolio Manager
         </h1>
         <p style={{ fontSize: '14px', color: '#cbd5e1', margin: 0 }}>
-          Track multiple watchlists with live charts
+          Track multiple watchlists with live charts • {priceUpdateStatus}
         </p>
       </div>
 
-      {/* Tabs - with better spacing */}
+      {/* Tabs */}
       <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '32px', paddingBottom: '16px', borderBottom: '1px solid #334155' }}>
         {categories.map((cat) => (
           <div key={cat.id} style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -207,7 +275,6 @@ export default function PortfolioPage() {
               </span>
             </button>
             
-            {/* Edit & Delete buttons always visible */}
             {activeCategory === cat.id && (
               <div style={{ display: 'flex', gap: '4px' }}>
                 <button
@@ -220,10 +287,8 @@ export default function PortfolioPage() {
                     borderRadius: '4px',
                     fontSize: '11px',
                     cursor: 'pointer',
-                    fontWeight: 600,
-                    transition: 'all 0.2s'
+                    fontWeight: 600
                   }}
-                  title="Edit"
                 >
                   Edit
                 </button>
@@ -237,10 +302,8 @@ export default function PortfolioPage() {
                     borderRadius: '4px',
                     fontSize: '11px',
                     cursor: 'pointer',
-                    fontWeight: 600,
-                    transition: 'all 0.2s'
+                    fontWeight: 600
                   }}
-                  title="Delete"
                 >
                   Delete
                 </button>
@@ -269,7 +332,7 @@ export default function PortfolioPage() {
 
       {/* Main Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.5fr', gap: '20px', minHeight: 'calc(100vh - 300px)' }}>
-        {/* Left Panel - Symbols */}
+        {/* Left Panel */}
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Symbols</h2>
@@ -309,6 +372,70 @@ export default function PortfolioPage() {
             }}
           />
 
+          {/* Import/Export Buttons */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+            <button
+              onClick={handleExportCSV}
+              disabled={!activeCategory}
+              style={{
+                flex: 1,
+                background: activeCategory ? '#06b6d4' : '#64748b',
+                border: 'none',
+                color: '#fff',
+                padding: '6px 8px',
+                borderRadius: '5px',
+                cursor: activeCategory ? 'pointer' : 'not-allowed',
+                fontSize: '11px',
+                fontWeight: 600
+              }}
+            >
+              Export CSV
+            </button>
+            <label style={{
+              flex: 1,
+              background: activeCategory ? '#f59e0b' : '#64748b',
+              border: 'none',
+              color: '#fff',
+              padding: '6px 8px',
+              borderRadius: '5px',
+              cursor: activeCategory ? 'pointer' : 'not-allowed',
+              fontSize: '11px',
+              fontWeight: 600,
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              Import CSV
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleImportCSV}
+                disabled={!activeCategory}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+
+          {/* Auto-update toggle */}
+          <button
+            onClick={() => setAutoUpdate(!autoUpdate)}
+            style={{
+              width: '100%',
+              background: autoUpdate ? '#10b981' : '#64748b',
+              border: 'none',
+              color: '#fff',
+              padding: '6px 8px',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: 600,
+              marginBottom: '12px'
+            }}
+          >
+            {autoUpdate ? '⏸ Stop Auto-update' : '▶ Auto-update Prices'}
+          </button>
+
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {filteredSymbols.length === 0 ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px' }}>
@@ -339,6 +466,9 @@ export default function PortfolioPage() {
                     <div style={{ fontSize: '11px', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {sym.name}
                     </div>
+                    <div style={{ fontSize: '12px', color: '#10b981', fontWeight: 600, marginTop: '2px' }}>
+                      ${sym.current_price.toFixed(2)}
+                    </div>
                   </div>
                   <button
                     onClick={(e) => {
@@ -355,7 +485,7 @@ export default function PortfolioPage() {
           </div>
         </div>
 
-        {/* Right Panel - Chart */}
+        {/* Right Panel */}
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
           <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9', marginBottom: '16px', margin: '0 0 16px 0' }}>
             {selectedSymbol ? `${selectedSymbol} - Live Chart` : 'Select a symbol'}

@@ -1,17 +1,19 @@
 """
-Portfolio API - Multiple Watchlist Categories System
+Portfolio API - Multiple Watchlist Categories System with Import/Export & Real-time Updates
 Location: /backend/app/routes/api/v1/portfolio.py
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import Column, String, Float, DateTime, Integer, ForeignKey
 from pydantic import BaseModel
 from app.config import get_db
-from app.database import Base, Trade, Account
+from app.database import Base
 from datetime import datetime
 import uuid
 import logging
+import csv
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,7 @@ class AddCategoryRequest(BaseModel):
     name: str
     description: str = None
     color: str = "#2569b0"
-    icon: str = "⭐"
+    icon: str = "STOCK"
 
 class UpdateCategoryRequest(BaseModel):
     name: str = None
@@ -40,19 +42,19 @@ class AddSymbolRequest(BaseModel):
 class WatchlistCategory(Base):
     """SQLAlchemy model for watchlist categories"""
     __tablename__ = "watchlist_categories"
-
+    
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, nullable=False)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     color = Column(String, default="#2569b0")
-    icon = Column(String, default="⭐")
+    icon = Column(String, default="STOCK")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class WatchlistSymbol(Base):
     """SQLAlchemy model for watchlist symbols"""
     __tablename__ = "watchlist_symbols"
-
+    
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     category_id = Column(String, ForeignKey("watchlist_categories.id", ondelete="CASCADE"), nullable=False)
     symbol = Column(String, nullable=False)
@@ -70,12 +72,11 @@ async def get_categories(user_id: int = 1, db: Session = Depends(get_db)):
     """
     try:
         categories = db.query(WatchlistCategory).filter(WatchlistCategory.user_id == user_id).all()
-        
         result = []
+        
         for cat in categories:
             # Count symbols in this category
             symbol_count = db.query(WatchlistSymbol).filter(WatchlistSymbol.category_id == cat.id).count()
-            
             result.append({
                 "id": cat.id,
                 "name": cat.name,
@@ -86,7 +87,6 @@ async def get_categories(user_id: int = 1, db: Session = Depends(get_db)):
             })
         
         logger.info(f"✅ Retrieved {len(result)} categories for user {user_id}")
-        
         return {
             "status": "success",
             "categories": result,
@@ -131,7 +131,6 @@ async def create_category(
         db.refresh(category)
         
         logger.info(f"✅ Created category '{request.name}' for user {user_id}")
-        
         return {
             "status": "success",
             "message": f"Category '{request.name}' created",
@@ -168,7 +167,7 @@ async def update_category(
         
         if request.name:
             category.name = request.name
-        if request.description:
+        if request.description is not None:
             category.description = request.description
         if request.color:
             category.color = request.color
@@ -179,14 +178,14 @@ async def update_category(
         db.refresh(category)
         
         logger.info(f"✅ Updated category {category_id}")
-        
         return {
             "status": "success",
             "message": "Category updated",
             "category": {
                 "id": category.id,
                 "name": category.name,
-                "color": category.color
+                "color": category.color,
+                "icon": category.icon
             }
         }
     
@@ -214,7 +213,6 @@ async def delete_category(category_id: str, db: Session = Depends(get_db)):
         db.commit()
         
         logger.info(f"✅ Deleted category '{cat_name}'")
-        
         return {
             "status": "success",
             "message": f"Category '{cat_name}' deleted (and all symbols)"
@@ -255,7 +253,6 @@ async def get_category_symbols(category_id: str, db: Session = Depends(get_db)):
         ]
         
         logger.info(f"✅ Retrieved {len(symbol_list)} symbols from category {category_id}")
-        
         return {
             "status": "success",
             "category": {
@@ -298,7 +295,7 @@ async def add_symbol_to_category(
         if existing:
             raise HTTPException(status_code=400, detail=f"{request.symbol} already in {category.name}")
         
-        # Add symbol
+        # Create symbol
         symbol = WatchlistSymbol(
             category_id=category_id,
             symbol=request.symbol.upper(),
@@ -309,15 +306,15 @@ async def add_symbol_to_category(
         db.commit()
         db.refresh(symbol)
         
-        logger.info(f"✅ Added {request.symbol} to category {category.name}")
-        
+        logger.info(f"✅ Added {request.symbol} to category '{category.name}'")
         return {
             "status": "success",
-            "message": f"Added {request.symbol} to {category.name}",
+            "message": f"{request.symbol} added to {category.name}",
             "symbol": {
                 "id": symbol.id,
                 "symbol": symbol.symbol,
-                "name": symbol.name
+                "name": symbol.name,
+                "current_price": symbol.current_price
             }
         }
     
@@ -329,10 +326,10 @@ async def add_symbol_to_category(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/symbols/{symbol_id}")
-async def remove_symbol(symbol_id: str, db: Session = Depends(get_db)):
+async def delete_symbol(symbol_id: str, db: Session = Depends(get_db)):
     """
     DELETE /api/v1/portfolio/symbols/{symbol_id}
-    Remove symbol from watchlist
+    Delete symbol from watchlist
     """
     try:
         symbol = db.query(WatchlistSymbol).filter(WatchlistSymbol.id == symbol_id).first()
@@ -340,20 +337,221 @@ async def remove_symbol(symbol_id: str, db: Session = Depends(get_db)):
         if not symbol:
             raise HTTPException(status_code=404, detail="Symbol not found")
         
-        symbol_name = symbol.symbol
+        sym_name = symbol.symbol
         db.delete(symbol)
         db.commit()
         
-        logger.info(f"✅ Removed {symbol_name} from watchlist")
-        
+        logger.info(f"✅ Deleted symbol '{sym_name}'")
         return {
             "status": "success",
-            "message": f"Removed {symbol_name}"
+            "message": f"Symbol '{sym_name}' deleted"
         }
     
     except HTTPException as e:
         raise e
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ Error removing symbol: {str(e)}")
+        logger.error(f"❌ Error deleting symbol: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== NEW: EXPORT/IMPORT ENDPOINTS ====================
+
+@router.get("/categories/{category_id}/export")
+async def export_symbols_csv(category_id: str, db: Session = Depends(get_db)):
+    """
+    GET /api/v1/portfolio/categories/{category_id}/export
+    Export symbols as CSV file
+    """
+    try:
+        category = db.query(WatchlistCategory).filter(WatchlistCategory.id == category_id).first()
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        
+        symbols = db.query(WatchlistSymbol).filter(WatchlistSymbol.category_id == category_id).all()
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Symbol', 'Name', 'Current Price', 'Added At'])
+        
+        for sym in symbols:
+            writer.writerow([
+                sym.symbol,
+                sym.name or '',
+                sym.current_price,
+                sym.added_at.strftime('%Y-%m-%d %H:%M:%S') if sym.added_at else ''
+            ])
+        
+        logger.info(f"✅ Exported {len(symbols)} symbols from {category.name}")
+        
+        return {
+            "status": "success",
+            "filename": f"{category.name}_symbols.csv",
+            "csv_data": output.getvalue()
+        }
+    
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"❌ Error exporting: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/categories/{category_id}/import")
+async def import_symbols_csv(
+    category_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    POST /api/v1/portfolio/categories/{category_id}/import
+    Import symbols from CSV file
+    CSV format: Symbol, Name, Current Price (optional)
+    """
+    try:
+        category = db.query(WatchlistCategory).filter(WatchlistCategory.id == category_id).first()
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        
+        # Read CSV file
+        contents = await file.read()
+        csv_file = io.StringIO(contents.decode('utf-8'))
+        reader = csv.reader(csv_file)
+        
+        added_count = 0
+        skipped_count = 0
+        
+        # Skip header if exists
+        next(reader, None)
+        
+        for row in reader:
+            if not row or len(row) < 1:
+                continue
+            
+            symbol = row[0].strip().upper()
+            name = row[1].strip() if len(row) > 1 else symbol
+            price = float(row[2]) if len(row) > 2 and row[2].strip() else 0.0
+            
+            # Check if already exists
+            existing = db.query(WatchlistSymbol).filter(
+                WatchlistSymbol.category_id == category_id,
+                WatchlistSymbol.symbol == symbol
+            ).first()
+            
+            if existing:
+                skipped_count += 1
+                continue
+            
+            # Add symbol
+            new_symbol = WatchlistSymbol(
+                category_id=category_id,
+                symbol=symbol,
+                name=name,
+                current_price=price
+            )
+            db.add(new_symbol)
+            added_count += 1
+        
+        db.commit()
+        
+        logger.info(f"✅ Imported {added_count} symbols, skipped {skipped_count} (already exist)")
+        
+        return {
+            "status": "success",
+            "message": f"Imported {added_count} symbols, skipped {skipped_count}",
+            "added": added_count,
+            "skipped": skipped_count
+        }
+    
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Error importing: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== NEW: REAL-TIME PRICE UPDATE ENDPOINTS ====================
+
+@router.post("/categories/{category_id}/update-prices")
+async def update_prices(
+    category_id: str,
+    prices: dict = None,
+    db: Session = Depends(get_db)
+):
+    """
+    POST /api/v1/portfolio/categories/{category_id}/update-prices
+    Bulk update symbol prices
+    Body: {"AAPL": 150.25, "GOOGL": 140.50}
+    """
+    try:
+        if not prices:
+            raise HTTPException(status_code=400, detail="No prices provided")
+        
+        category = db.query(WatchlistCategory).filter(WatchlistCategory.id == category_id).first()
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        
+        updated_count = 0
+        for symbol, price in prices.items():
+            sym_obj = db.query(WatchlistSymbol).filter(
+                WatchlistSymbol.category_id == category_id,
+                WatchlistSymbol.symbol == symbol.upper()
+            ).first()
+            
+            if sym_obj:
+                sym_obj.current_price = float(price)
+                updated_count += 1
+        
+        db.commit()
+        logger.info(f"✅ Updated {updated_count} prices in {category.name}")
+        
+        return {
+            "status": "success",
+            "message": f"Updated {updated_count} prices",
+            "updated": updated_count
+        }
+    
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Error updating prices: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/categories/{category_id}/symbols-with-prices")
+async def get_symbols_with_prices(category_id: str, db: Session = Depends(get_db)):
+    """
+    GET /api/v1/portfolio/categories/{category_id}/symbols-with-prices
+    Get all symbols with current prices (for real-time updates)
+    """
+    try:
+        category = db.query(WatchlistCategory).filter(WatchlistCategory.id == category_id).first()
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        
+        symbols = db.query(WatchlistSymbol).filter(WatchlistSymbol.category_id == category_id).all()
+        
+        symbol_list = [
+            {
+                "id": s.id,
+                "symbol": s.symbol,
+                "name": s.name or s.symbol,
+                "current_price": s.current_price
+            }
+            for s in symbols
+        ]
+        
+        return {
+            "status": "success",
+            "category": {
+                "id": category.id,
+                "name": category.name,
+            },
+            "symbols": symbol_list,
+            "count": len(symbol_list)
+        }
+    
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"❌ Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

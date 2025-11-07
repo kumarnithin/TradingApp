@@ -27,7 +27,9 @@ export default function AccountsPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   
+  // ✅ FIX: Get filter from URL
   const selectedAccountId = searchParams.get('account_id')
+  console.log('🔍 Filter Debug:', { selectedAccountId, urlParams: searchParams.toString() })
   
   const [accounts, setAccounts] = useState<AccountData[]>([])
   const [connectedAccount, setConnectedAccount] = useState<AccountData | null>(null)
@@ -54,10 +56,11 @@ export default function AccountsPage() {
       const res = await axios.get(`${API_URL}/api/v1/accounts/list`)
       if (res.data.accounts) {
         setAccounts(res.data.accounts)
+        console.log('✅ Accounts fetched:', res.data.accounts.length)
       }
       setError(null)
     } catch (e) {
-      console.error('Error:', e)
+      console.error('❌ Error fetching accounts:', e)
       setError('Failed to fetch accounts')
       setAccounts([])
     } finally {
@@ -75,7 +78,7 @@ export default function AccountsPage() {
         setConnectedAccount(null)
       }
     } catch (e) {
-      console.error('Error:', e)
+      console.error('Error fetching connected account:', e)
       setConnectedAccount(null)
     }
   }
@@ -88,10 +91,22 @@ export default function AccountsPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Filter accounts based on dropdown selection
+  // ✅ FIX: Compute filtered accounts - THIS IS THE CRITICAL PART
   const filteredAccounts = selectedAccountId
-    ? accounts.filter(acc => acc.id === selectedAccountId)
+    ? accounts.filter(acc => {
+        const matches = acc.id === selectedAccountId
+        console.log(`Checking account ${acc.id}: ${matches ? '✅ MATCH' : '❌ NO MATCH'} (looking for ${selectedAccountId})`)
+        return matches
+      })
     : accounts
+
+  console.log('📊 Display Debug:', {
+    selectedAccountId,
+    totalAccounts: accounts.length,
+    filteredCount: filteredAccounts.length,
+    accountIds: accounts.map(a => a.id),
+    filteredAccountIds: filteredAccounts.map(a => a.id)
+  })
 
   // Create account
   const handleCreateAccount = async (e: React.FormEvent) => {
@@ -190,7 +205,6 @@ export default function AccountsPage() {
     try {
       await axios.delete(`${API_URL}/api/v1/accounts/${accountId}`)
       setError(null)
-      // Clear filter if deleted account was selected
       if (selectedAccountId === accountId) {
         router.push('/dashboard/accounts')
       }
@@ -215,6 +229,7 @@ export default function AccountsPage() {
 
   // Clear filter button
   const clearFilter = () => {
+    console.log('🔄 Clearing filter...')
     router.push('/dashboard/accounts')
   }
 
@@ -282,7 +297,9 @@ export default function AccountsPage() {
       {activeTab === 'view' && (
         <div>
           {loading ? (
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '40px', textAlign: 'center' }}>Loading...</div>
+            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '40px', textAlign: 'center' }}>
+              <div>Loading accounts...</div>
+            </div>
           ) : filteredAccounts.length === 0 ? (
             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '40px', textAlign: 'center' }}>
               <div style={{ fontSize: '16px', marginBottom: '8px' }}>
