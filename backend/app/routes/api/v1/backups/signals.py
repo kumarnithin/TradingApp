@@ -1,8 +1,8 @@
 """
-🚀 FINAL SIGNALS.PY - FIXED & COMPLETE
+🚀 FINAL SIGNALS.PY - WITH AUTO-EXECUTION
 ✅ Saves signals to database
 ✅ AUTO-EXECUTES on IB
-✅ All syntax errors fixed
+✅ Updates signal status to FILLED
 Location: /backend/app/routes/api/v1/signals.py
 
 COPY THIS ENTIRE FILE - Replace your current signals.py
@@ -160,7 +160,7 @@ async def receive_tradingview_signal(
         
         print(f"💾 Signal saved: {signal_id}")
         
-        # ✅ AUTO-EXECUTE ON IB
+        # ✅ NEW: AUTO-EXECUTE ON IB
         print(f"🚀 Auto-executing on IB...")
         try:
             from app.services.ib_client import ib_client
@@ -192,11 +192,13 @@ async def receive_tradingview_signal(
                 else:
                     error = result.get("error", "Unknown error")
                     print(f"⚠️ IB order failed: {error}")
+                    # Signal stays PENDING
             else:
                 print("⚠️ IB client not connected, signal stays PENDING")
         
         except Exception as e:
             print(f"⚠️ Auto-execution failed: {str(e)}")
+            # Signal stays PENDING, can retry manually
         
         print(f"✅ SUCCESS!")
         print("=" * 60 + "\n")

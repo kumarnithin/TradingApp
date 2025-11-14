@@ -343,9 +343,7 @@ async def get_connection_status():
                 "error": "IB Client Service not available"
             }
 
-        #result = await ib_client.get_connection_status()
-        result = ib_client.get_connection_status()  # ✅ Remove 'await'
-
+        result = await ib_client.get_connection_status()
         return result
 
     except Exception as e:

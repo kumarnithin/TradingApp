@@ -1,9 +1,7 @@
 """
-🚀 MAIN APPLICATION - CLEANED UP
+Main FastAPI Application - CORRECTED with IB Router
+Complete with all routers properly registered including IB Connection
 Location: /backend/app/main.py
-
-✅ Removed tradingview_webhook adapter import (not needed - signals.py handles it)
-✅ All existing features preserved
 """
 
 from fastapi import FastAPI
@@ -11,6 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 from dotenv import load_dotenv
+from app.routes.api.v1 import tools
+
+from app.services import advanced_tools
+from app.routes.api.v1 import advanced_tools as adv_tools_routes
+# In /backend/app/main.py
+from app.routes.api.v1 import pretrade
+from app.routes.api.v1 import trading_discipline
+from app.routes.api.v1 import signals_webhook
 
 load_dotenv()
 
@@ -45,35 +51,33 @@ logger.info("📦 Loading routers...")
 try:
     # Import all routers
     from app.routes.api.v1 import signals, alerts, accounts, portfolio, ib, trades, tools
-    from app.services import advanced_tools
-    from app.routes.api.v1 import advanced_tools as adv_tools_routes
-    from app.routes.api.v1 import pretrade
-    from app.routes.api.v1 import trading_discipline
-
+    
     # Include routers with correct prefixes
     app.include_router(accounts.router, prefix="/api/v1/accounts", tags=["Accounts"])
     app.include_router(signals.router, prefix="/api/v1/signals", tags=["Signals"])
     app.include_router(alerts.router, prefix="/api/v1/alerts", tags=["Alerts"])
     app.include_router(portfolio.router, prefix="/api/v1/portfolio", tags=["Portfolio"])
-    app.include_router(ib.router, prefix="/api/v1/ib", tags=["IB Connection"])
+    app.include_router(ib.router, prefix="/api/v1/ib", tags=["IB Connection"])  # ✅ ADDED!
     app.include_router(trades.router, prefix="/api/v1/trades")
     app.include_router(tools.router, prefix="/api/v1/tools")
     app.include_router(adv_tools_routes.router, prefix="/api/v1/advanced-tools")
     app.include_router(pretrade.router, prefix="/api/v1/pretrade")
     app.include_router(trading_discipline.router, prefix="/api/v1/trading-discipline", tags=["Trading Discipline"])
+    app.include_router(signals_webhook.router, prefix="/api/v1/signals", tags=["Signals Webhook"]) 
 
+    
     logger.info("✅ All routers registered successfully")
     logger.info(" - Accounts router: /api/v1/accounts/*")
     logger.info(" - Signals router: /api/v1/signals/*")
     logger.info(" - Alerts router: /api/v1/alerts/*")
     logger.info(" - Portfolio router: /api/v1/portfolio/*")
-    logger.info(" - IB Connection router: /api/v1/ib/*")
-    logger.info(" - Trades router: /api/v1/trades/*")
-    logger.info(" - Tools router: /api/v1/tools/*")
+    logger.info(" - IB Connection router: /api/v1/ib/*")  # ✅ ADDED!
+    logger.info(" - Trades router: /api/v1/trades/*")  # ✅ ADDED!
+    logger.info(" - Tools router: /api/v1/tools/*")  
     logger.info(" - Advanced Tools router: /api/v1/advanced-tools/*")
     logger.info(" - Pretrade Tools router: /api/v1/pretrade/*")
-    logger.info(" - Trading Discipline router: /api/v1/trading-discipline/*")
-
+    logger.info(" - Trading Discipline router: /api/v1/trading_discipline/*")
+    
 except Exception as e:
     logger.error(f"❌ Error importing routers: {str(e)}")
     logger.error(" Make sure your route files are in: /backend/app/routes/api/v1/")
@@ -88,13 +92,12 @@ async def startup_event():
     logger.info(f" Backend running on http://127.0.0.1:8000")
     logger.info(f" Docs available at http://127.0.0.1:8000/docs")
     logger.info(" Available endpoints:")
-    logger.info(" - /api/v1/accounts/* (Account management)")
-    logger.info(" - /api/v1/signals/* (TradingView signals)")
-    logger.info(" - /api/v1/signals/webhook (TradingView webhook) ✅")
-    logger.info(" - /api/v1/alerts/* (Price alerts)")
-    logger.info(" - /api/v1/trades/* (Trades management)")
-    logger.info(" - /api/v1/portfolio/* (Watchlist management)")
-    logger.info(" - /api/v1/ib/* (Interactive Brokers connection)")
+    logger.info("   - /api/v1/accounts/* (Account management)")
+    logger.info("   - /api/v1/signals/* (TradingView signals)")
+    logger.info("   - /api/v1/alerts/* (Price alerts)")
+    logger.info("   - /api/v1/trades/* (Trades management)")
+    logger.info("   - /api/v1/portfolio/* (Watchlist management)")
+    logger.info("   - /api/v1/ib/* (Interactive Brokers connection)")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -121,11 +124,9 @@ async def root():
         "message": "Trading Automation API",
         "docs": "/docs",
         "health": "/health",
-        "webhook_endpoint": "/api/v1/signals/webhook",
         "available_endpoints": {
             "accounts": "/api/v1/accounts/",
             "signals": "/api/v1/signals/",
-            "signals_webhook": "/api/v1/signals/webhook",
             "alerts": "/api/v1/alerts/",
             "portfolio": "/api/v1/portfolio/",
             "ib_connection": "/api/v1/ib/",

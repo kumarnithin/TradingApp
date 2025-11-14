@@ -1,11 +1,7 @@
 """
-🚀 FINAL SIGNALS.PY - FIXED & COMPLETE
-✅ Saves signals to database
-✅ AUTO-EXECUTES on IB
-✅ All syntax errors fixed
+🚀 FINAL SIGNALS.PY - USE RAW SQL INSERT WITH user_id
+✅ RAW SQL guarantees user_id is included in INSERT
 Location: /backend/app/routes/api/v1/signals.py
-
-COPY THIS ENTIRE FILE - Replace your current signals.py
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
@@ -17,7 +13,6 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 import logging
-import asyncio
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Signals"])
@@ -68,15 +63,10 @@ async def receive_tradingview_signal(
     request: Request,
     db: Session = Depends(get_db),
     user_id: int = Query(default=1),
-    account_id: str = Query(default=""),
-    account_name: str = Query(default="")
-):
-    """📨 RECEIVE TRADINGVIEW WEBHOOK ALERTS
+    account_id: str = Query(default="")
     
-    Supports both:
-    1. account_id (UUID): ?account_id=cc1c1462-df92-42cc-8943-14393cbc5e49
-    2. account_name (IB name): ?account_name=DU2348080
-    """
+):
+    """📨 RECEIVE TRADINGVIEW WEBHOOK ALERTS"""
     
     print("\n" + "=" * 60)
     print("🚨 TRADINGVIEW ALERT RECEIVED!")
@@ -104,34 +94,18 @@ async def receive_tradingview_signal(
         
         print(f"📊 Signal: {action} {quantity} {ticker} @ {price}")
         
-        # ✅ Support both account_id and account_name
-        final_account_id = account_id
-        final_account_name = account_name
+        if not account_id:
+            print("❌ account_id required!")
+            raise HTTPException(status_code=400, detail="account_id required")
         
-        # If account_name provided, look it up
-        if account_name and not account_id:
-            print(f"🔍 Looking up account by name: {account_name}")
-            account = db.query(Account).filter(Account.account_name == account_name).first()
-            if account:
-                final_account_id = account.id
-                print(f"✅ Found account: {account_name} = {final_account_id}")
-            else:
-                print(f"❌ Account not found: {account_name}")
-                raise HTTPException(status_code=400, detail=f"Account not found: {account_name}")
-        
-        if not final_account_id:
-            print("❌ account_id or account_name required!")
-            raise HTTPException(status_code=400, detail="account_id or account_name required")
-        
-        # Verify account exists
-        account = db.query(Account).filter(Account.id == final_account_id).first()
+        account = db.query(Account).filter(Account.id == account_id).first()
         if not account:
-            print(f"❌ Account not found: {final_account_id}")
+            print(f"❌ Account not found: {account_id}")
             raise HTTPException(status_code=400, detail="Account not found")
         
-        print(f"✅ Account found: {final_account_id}")
+        print(f"✅ Account found: {account_id}")
         
-        # ✅ USE RAW SQL INSERT with ALL required fields
+        # ✅ USE RAW SQL INSERT with ALL required fields including user_id
         now = datetime.utcnow()
         
         result = db.execute(text("""
@@ -144,7 +118,7 @@ async def receive_tradingview_signal(
             ) RETURNING id
         """), {
             "user_id": user_id,
-            "account_id": final_account_id,
+            "account_id": account_id,
             "symbol": ticker.upper(),
             "action": action,
             "quantity": quantity,
@@ -159,45 +133,6 @@ async def receive_tradingview_signal(
         db.commit()
         
         print(f"💾 Signal saved: {signal_id}")
-        
-        # ✅ AUTO-EXECUTE ON IB
-        print(f"🚀 Auto-executing on IB...")
-        try:
-            from app.services.ib_client import ib_client
-            
-            if ib_client and ib_client.is_connected():
-                print(f"📤 Connected to IB, placing order...")
-                
-                result = await ib_client.place_order(
-                    symbol=ticker.upper(),
-                    action=action,
-                    quantity=quantity,
-                    order_type="MKT",
-                    limit_price=price if price else None
-                )
-                
-                if result.get("success"):
-                    order_id = result.get("order_id")
-                    print(f"✅ Order placed on IB! Order ID: {order_id}")
-                    
-                    # Update signal to FILLED
-                    db.execute(text("""
-                        UPDATE signals 
-                        SET status = 'FILLED', filled_at = NOW(), processed_at = NOW()
-                        WHERE id = :signal_id
-                    """), {"signal_id": signal_id})
-                    db.commit()
-                    
-                    print(f"✅ Signal marked as FILLED")
-                else:
-                    error = result.get("error", "Unknown error")
-                    print(f"⚠️ IB order failed: {error}")
-            else:
-                print("⚠️ IB client not connected, signal stays PENDING")
-        
-        except Exception as e:
-            print(f"⚠️ Auto-execution failed: {str(e)}")
-        
         print(f"✅ SUCCESS!")
         print("=" * 60 + "\n")
         
@@ -207,9 +142,8 @@ async def receive_tradingview_signal(
             "symbol": ticker.upper(),
             "action": action,
             "quantity": quantity,
-            "account_id": final_account_id,
-            "account_name": final_account_name or account.account_name,
-            "message": "Signal received and processed"
+            "account_id": account_id,
+            "message": "Signal received from TradingView"
         }
     
     except HTTPException:

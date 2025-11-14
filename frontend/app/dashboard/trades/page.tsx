@@ -1,502 +1,378 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
-import axios from 'axios'
+import React, { useState, useEffect } from 'react';
+import styles from './trades.module.css';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-interface TradeData {
-  id: string
-  account_id: string
-  symbol: string
-  action: string
-  entry_price: number
-  exit_price?: number
-  quantity: number
-  trade_type: string
-  status: string
-  profit_loss?: number
-  win_percentage?: number
-  commission?: number
-  notes?: string
-  entry_at?: string
-  exit_at?: string
-  created_at?: string
-}
-
-interface StatsData {
-  total_trades: number
-  open_trades: number
-  closed_trades: number
-  win_rate: number
-  total_profit: number
-  total_loss: number
-  best_trade: number
-  worst_trade: number
-  average_win: number
-  average_loss: number
-}
-
-interface AccountData {
-  id: string
-  account_name: string
-  account_type: string
+interface Trade {
+  id: string;
+  account_id: string;
+  symbol: string;
+  action: string;
+  entry_price: number;
+  exit_price: number | null;
+  quantity: number;
+  trade_type: string;
+  status: string;
+  profit_loss: number | null;
+  win_percentage: number | null;
+  commission: number;
+  notes: string;
+  entry_at: string;
+  exit_at: string | null;
+  created_at: string;
 }
 
 export default function TradesPage() {
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const selectedAccountId = searchParams.get('account_id')
-
-  const [trades, setTrades] = useState<TradeData[]>([])
-  const [accounts, setAccounts] = useState<AccountData[]>([])
-  const [stats, setStats] = useState<StatsData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'view' | 'create' | 'edit'>('view')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [symbolFilter, setSymbolFilter] = useState<string>('')
-
-  const [formData, setFormData] = useState({
-    account_id: selectedAccountId || '',
+  const [selectedAccount, setSelectedAccount] = useState<string>('');
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [symbolFilter, setSymbolFilter] = useState<string>('');
+  const [showForm, setShowForm] = useState(false);
+  const [newTrade, setNewTrade] = useState({
     symbol: '',
     action: 'BUY',
-    entry_price: '',
-    quantity: '',
-    trade_type: 'Market',
-    commission: '',
-    notes: '',
-  })
+    entry_price: 0,
+    quantity: 1,
+    trade_type: 'Market'
+  });
 
-  const [editFormData, setEditFormData] = useState({
-    exit_price: '',
-    status: '',
-    notes: '',
-    commission: '',
-  })
-
-  // Fetch accounts
+  // ✅ FIXED: Don't auto-fetch accounts (they may not exist)
+  // Just use manual account ID input
   useEffect(() => {
-    const fetchAccounts = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/api/v1/accounts/list`)
-        if (res.data.accounts) {
-          setAccounts(res.data.accounts)
+    // Load saved account ID from localStorage if available
+    const savedAccountId = localStorage.getItem('selectedAccountId');
+    if (savedAccountId) {
+      setSelectedAccount(savedAccountId);
+      fetchTrades(savedAccountId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedAccount) {
+      // Save to localStorage
+      localStorage.setItem('selectedAccountId', selectedAccount);
+      fetchTrades(selectedAccount);
+    }
+  }, [selectedAccount]);
+
+  // ✅ FIXED: Fetch trades from the correct endpoint
+  const fetchTrades = async (accountId: string) => {
+    if (!accountId) {
+      setTrades([]);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const url = `/api/v1/trades/list-from-signals?account_id=${accountId}`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Endpoint not found. Make sure backend is running.');
         }
-      } catch (e) {
-        console.error('Error fetching accounts:', e)
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    }
-    fetchAccounts()
-  }, [])
-
-  // Fetch trades
-  const fetchTrades = async () => {
-    try {
-      setLoading(true)
-      let url = `${API_URL}/api/v1/trades/list`
-      const params = new URLSearchParams()
-
-      if (selectedAccountId) {
-        params.append('account_id', selectedAccountId)
+      
+      const result = await response.json();
+      
+      if (result.trades && Array.isArray(result.trades)) {
+        setTrades(result.trades);
+        setError('');
+      } else {
+        setTrades([]);
       }
-      if (statusFilter && statusFilter !== 'all') {
-        params.append('status', statusFilter)
-      }
-      if (symbolFilter) {
-        params.append('symbol', symbolFilter)
-      }
-
-      if (params.toString()) {
-        url += `?${params.toString()}`
-      }
-
-      const res = await axios.get(url)
-      if (res.data.trades) {
-        setTrades(res.data.trades)
-      }
-      setError(null)
-    } catch (e) {
-      console.error('Error fetching trades:', e)
-      setError('Failed to fetch trades')
-      setTrades([])
+    } catch (err) {
+      console.error('Error fetching trades:', err);
+      setError(`Failed to load trades: ${(err as Error).message}`);
+      setTrades([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  // Fetch stats
-  const fetchStats = async () => {
-    if (!selectedAccountId) return
+  const handleCreateTrade = async () => {
+    if (!selectedAccount) {
+      alert('Please enter an account ID');
+      return;
+    }
 
+    if (!newTrade.symbol) {
+      alert('Please enter a symbol');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/api/v1/trades/stats/${selectedAccountId}`)
-      if (res.data.stats) {
-        setStats(res.data.stats)
+      const response = await fetch('/api/v1/trades/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          account_id: selectedAccount,
+          ...newTrade,
+          entry_price: parseFloat(newTrade.entry_price as any),
+          quantity: parseInt(newTrade.quantity as any)
+        })
+      });
+
+      const result = await response.json();
+      if (result.status === 'success') {
+        setShowForm(false);
+        setNewTrade({ symbol: '', action: 'BUY', entry_price: 0, quantity: 1, trade_type: 'Market' });
+        alert('Trade created successfully!');
+        fetchTrades(selectedAccount);
+      } else {
+        alert('Error creating trade: ' + (result.detail || result.message || 'Unknown error'));
       }
-    } catch (e) {
-      console.error('Error fetching stats:', e)
+    } catch (err) {
+      alert('Error: ' + (err as Error).message);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
-  useEffect(() => {
-    fetchTrades()
-    fetchStats()
-  }, [selectedAccountId, statusFilter, symbolFilter])
-
-  // Create trade
-  const handleCreateTrade = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.account_id || !formData.symbol || !formData.entry_price || !formData.quantity) {
-      setError('Please fill all required fields')
-      return
-    }
-
+  const handleUpdateTrade = async (tradeId: string, exitPrice: number) => {
+    setLoading(true);
     try {
-      const payload = {
-        account_id: formData.account_id,
-        symbol: formData.symbol.toUpperCase(),
-        action: formData.action,
-        entry_price: parseFloat(formData.entry_price),
-        quantity: parseInt(formData.quantity),
-        trade_type: formData.trade_type,
-        commission: formData.commission ? parseFloat(formData.commission) : 0,
-        notes: formData.notes,
+      const response = await fetch(`/api/v1/trades/${tradeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exit_price: exitPrice })
+      });
+
+      const result = await response.json();
+      if (result.status === 'success') {
+        alert('Trade updated successfully!');
+        fetchTrades(selectedAccount);
+      } else {
+        alert('Error updating trade: ' + (result.detail || result.message || 'Unknown error'));
       }
-
-      await axios.post(`${API_URL}/api/v1/trades/create`, payload)
-      setError(null)
-      setFormData({
-        account_id: selectedAccountId || '',
-        symbol: '',
-        action: 'BUY',
-        entry_price: '',
-        quantity: '',
-        trade_type: 'Market',
-        commission: '',
-        notes: '',
-      })
-      setActiveTab('view')
-      await fetchTrades()
-      await fetchStats()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to create trade')
+    } catch (err) {
+      alert('Error: ' + (err as Error).message);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
-  // Update trade
-  const handleUpdateTrade = async (e: React.FormEvent, tradeId: string) => {
-    e.preventDefault()
-
-    try {
-      const payload = {
-        exit_price: editFormData.exit_price ? parseFloat(editFormData.exit_price) : undefined,
-        status: editFormData.status || undefined,
-        notes: editFormData.notes || undefined,
-        commission: editFormData.commission ? parseFloat(editFormData.commission) : undefined,
-      }
-
-      await axios.put(`${API_URL}/api/v1/trades/${tradeId}`, payload)
-      setError(null)
-      setEditingId(null)
-      setActiveTab('view')
-      await fetchTrades()
-      await fetchStats()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to update trade')
-    }
-  }
-
-  // Delete trade
   const handleDeleteTrade = async (tradeId: string) => {
-    if (!confirm('Delete this trade?')) return
+    if (window.confirm('Are you sure you want to delete this trade?')) {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/v1/trades/${tradeId}`, {
+          method: 'DELETE'
+        });
 
-    try {
-      await axios.delete(`${API_URL}/api/v1/trades/${tradeId}`)
-      setError(null)
-      await fetchTrades()
-      await fetchStats()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to delete trade')
+        const result = await response.json();
+        if (result.status === 'success') {
+          alert('Trade deleted successfully!');
+          fetchTrades(selectedAccount);
+        } else {
+          alert('Error deleting trade: ' + (result.detail || result.message || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Error: ' + (err as Error).message);
+      } finally {
+        setLoading(false);
+      }
     }
-  }
+  };
 
-  // Start editing
-  const handleEditClick = (trade: TradeData) => {
-    setEditingId(trade.id)
-    setEditFormData({
-      exit_price: trade.exit_price?.toString() || '',
-      status: trade.status,
-      notes: trade.notes || '',
-      commission: trade.commission?.toString() || '',
-    })
-    setActiveTab('edit')
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case 'OPEN':
-        return '#3b82f6'
-      case 'CLOSED':
-        return '#10b981'
-      case 'PENDING':
-        return '#f59e0b'
-      default:
-        return '#6b7280'
-    }
-  }
-
-  const getPnLColor = (pnl?: number) => {
-    if (!pnl) return '#6b7280'
-    return pnl > 0 ? '#10b981' : '#ef4444'
-  }
-
-  const clearFilter = () => {
-    router.push('/dashboard/trades')
-  }
+  const filteredTrades = trades.filter((trade: Trade) => {
+    if (statusFilter && trade.status.toUpperCase() !== statusFilter.toUpperCase()) return false;
+    if (symbolFilter && trade.symbol.toUpperCase() !== symbolFilter.toUpperCase()) return false;
+    return true;
+  });
 
   return (
-    <div style={{ padding: '24px', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', minHeight: '100vh', color: '#fff', fontFamily: 'system-ui' }}>
-      {/* Header */}
-      <div style={{ borderBottom: '1px solid #334155', paddingBottom: '20px', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, margin: '0 0 8px 0', color: '#f1f5f9' }}>Trade Management</h1>
-        <p style={{ fontSize: '14px', color: '#cbd5e1', margin: 0 }}>Track and manage your trades</p>
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <h1>📊 Trades</h1>
+        <p>Track and manage your trades</p>
       </div>
 
-      {/* Filter Banner */}
-      {selectedAccountId && (
-        <div style={{ background: '#1e40af', border: '1px solid #3b82f6', borderRadius: '8px', padding: '12px 16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: '#bfdbfe' }}>
-            🔍 Filtered by account
-          </div>
-          <button 
-            onClick={clearFilter}
-            style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#bfdbfe', padding: '6px 12px', borderRadius: '5px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+      <div className={styles.controls}>
+        <input
+          type="text"
+          placeholder="Enter Account ID (e.g., DU2348080)"
+          value={selectedAccount}
+          onChange={(e) => setSelectedAccount(e.target.value)}
+          className={styles.input}
+          disabled={loading}
+        />
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className={styles.select}
+          disabled={loading}
+        >
+          <option value="">All Status</option>
+          <option value="OPEN">OPEN</option>
+          <option value="CLOSED">CLOSED</option>
+        </select>
+
+        <input
+          type="text"
+          placeholder="Filter by symbol (e.g., EURUSD)..."
+          value={symbolFilter}
+          onChange={(e) => setSymbolFilter(e.target.value)}
+          className={styles.input}
+          disabled={loading}
+        />
+
+        <button 
+          onClick={() => setShowForm(!showForm)} 
+          className={styles.button}
+          disabled={loading || !selectedAccount}
+        >
+          {showForm ? 'Cancel' : '+ New Trade'}
+        </button>
+
+        <button 
+          onClick={() => fetchTrades(selectedAccount)} 
+          className={styles.button}
+          disabled={loading || !selectedAccount}
+        >
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className={styles.form}>
+          <h2>Create New Trade</h2>
+          <input
+            type="text"
+            placeholder="Symbol (e.g., EURUSD)"
+            value={newTrade.symbol}
+            onChange={(e) => setNewTrade({ ...newTrade, symbol: e.target.value })}
+            className={styles.input}
+            disabled={loading}
+          />
+          <select
+            value={newTrade.action}
+            onChange={(e) => setNewTrade({ ...newTrade, action: e.target.value })}
+            className={styles.select}
+            disabled={loading}
           >
-            Clear Filter
+            <option value="BUY">BUY</option>
+            <option value="SELL">SELL</option>
+          </select>
+          <input
+            type="number"
+            placeholder="Entry Price"
+            value={newTrade.entry_price}
+            onChange={(e) => setNewTrade({ ...newTrade, entry_price: parseFloat(e.target.value) })}
+            className={styles.input}
+            disabled={loading}
+            step="0.0001"
+          />
+          <input
+            type="number"
+            placeholder="Quantity"
+            value={newTrade.quantity}
+            onChange={(e) => setNewTrade({ ...newTrade, quantity: parseInt(e.target.value) })}
+            className={styles.input}
+            disabled={loading}
+          />
+          <button 
+            onClick={handleCreateTrade} 
+            className={styles.submitButton}
+            disabled={loading}
+          >
+            {loading ? 'Creating...' : 'Create Trade'}
           </button>
         </div>
       )}
 
-      {/* Error */}
-      {error && (
-        <div style={{ background: '#7f1d1d', border: '1px solid #dc2626', borderRadius: '8px', padding: '16px', color: '#fca5a5', marginBottom: '24px' }}>
-          ⚠️ {error}
-        </div>
-      )}
+      {error && <div className={styles.error}>⚠️ {error}</div>}
 
-      {/* Stats Grid (if account selected) */}
-      {selectedAccountId && stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px' }}>TOTAL</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#f1f5f9' }}>{stats.total_trades}</div>
-          </div>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px' }}>WIN RATE</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>{stats.win_rate}%</div>
-          </div>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px' }}>PROFIT</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>${stats.total_profit}</div>
-          </div>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px' }}>AVG WIN</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>${stats.average_win}</div>
-          </div>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '12px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px' }}>OPEN</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>{stats.open_trades}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid #334155', paddingBottom: '16px' }}>
-        <button onClick={() => setActiveTab('view')} style={{ background: activeTab === 'view' ? '#3b82f6' : 'transparent', border: 'none', color: '#fff', padding: '8px 16px', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-          📋 Trades ({trades.length})
-        </button>
-        <button onClick={() => { setActiveTab('create'); setFormData({ ...formData, account_id: selectedAccountId || '' }); }} style={{ background: activeTab === 'create' ? '#3b82f6' : 'transparent', border: 'none', color: '#fff', padding: '8px 16px', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-          ➕ New Trade
-        </button>
+      <div className={styles.tableContainer}>
+        {loading ? (
+          <div className={styles.loading}>Loading trades...</div>
+        ) : (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>SYMBOL</th>
+                <th>ACTION</th>
+                <th>QTY</th>
+                <th>ENTRY</th>
+                <th>EXIT</th>
+                <th>P&L</th>
+                <th>WIN %</th>
+                <th>STATUS</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTrades.length > 0 ? (
+                filteredTrades.map((trade: Trade) => (
+                  <tr key={trade.id} className={trade.status === 'OPEN' ? styles.openTrade : styles.closedTrade}>
+                    <td><strong>{trade.symbol}</strong></td>
+                    <td>
+                      <span className={trade.action === 'BUY' ? styles.buy : styles.sell}>
+                        {trade.action}
+                      </span>
+                    </td>
+                    <td>{trade.quantity}</td>
+                    <td>${trade.entry_price?.toFixed(4)}</td>
+                    <td>${trade.exit_price ? trade.exit_price.toFixed(4) : '-'}</td>
+                    <td className={
+                      trade.profit_loss && trade.profit_loss > 0 ? styles.profit 
+                      : trade.profit_loss && trade.profit_loss < 0 ? styles.loss 
+                      : ''
+                    }>
+                      ${trade.profit_loss?.toFixed(2) || '-'}
+                    </td>
+                    <td>{trade.win_percentage?.toFixed(2) || '-'}%</td>
+                    <td>
+                      <span className={`${styles.status} ${styles[trade.status.toLowerCase()]}`}>
+                        {trade.status}
+                      </span>
+                    </td>
+                    <td>
+                      {trade.status === 'OPEN' && (
+                        <button
+                          onClick={() => {
+                            const exitPrice = prompt('Enter exit price:');
+                            if (exitPrice) handleUpdateTrade(trade.id, parseFloat(exitPrice));
+                          }}
+                          className={styles.actionButton}
+                          disabled={loading}
+                        >
+                          Close
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteTrade(trade.id)}
+                        className={styles.deleteButton}
+                        disabled={loading}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={9} className={styles.empty}>
+                    {selectedAccount 
+                      ? 'No trades found. Send a TradingView signal to see trades here!' 
+                      : 'Enter an account ID to load trades.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* VIEW TAB */}
-      {activeTab === 'view' && (
-        <div>
-          {/* Filters */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-            <select 
-              value={statusFilter} 
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', cursor: 'pointer' }}
-            >
-              <option value="all">All Status</option>
-              <option value="OPEN">Open</option>
-              <option value="CLOSED">Closed</option>
-              <option value="PENDING">Pending</option>
-            </select>
-
-            <input 
-              type="text"
-              placeholder="Filter by symbol..."
-              value={symbolFilter}
-              onChange={(e) => setSymbolFilter(e.target.value)}
-              style={{ padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }}
-            />
-          </div>
-
-          {loading ? (
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '40px', textAlign: 'center' }}>Loading...</div>
-          ) : trades.length === 0 ? (
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '40px', textAlign: 'center' }}>
-              <div style={{ fontSize: '16px', marginBottom: '8px' }}>No trades found</div>
-              <div style={{ fontSize: '12px', color: '#cbd5e1' }}>Create a new trade to get started</div>
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>SYMBOL</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>ACTION</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>QTY</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>ENTRY</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>EXIT</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>P&L</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>WIN %</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>STATUS</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trades.map(trade => (
-                    <tr key={trade.id} style={{ borderBottom: '1px solid #334155' }}>
-                      <td style={{ padding: '12px', fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>{trade.symbol}</td>
-                      <td style={{ padding: '12px', fontSize: '14px', fontWeight: 600, color: trade.action === 'BUY' ? '#10b981' : '#ef4444' }}>{trade.action}</td>
-                      <td style={{ padding: '12px', fontSize: '14px', color: '#cbd5e1' }}>{trade.quantity}</td>
-                      <td style={{ padding: '12px', fontSize: '14px', color: '#cbd5e1' }}>${trade.entry_price}</td>
-                      <td style={{ padding: '12px', fontSize: '14px', color: '#cbd5e1' }}>${trade.exit_price || '-'}</td>
-                      <td style={{ padding: '12px', fontSize: '14px', fontWeight: 600, color: getPnLColor(trade.profit_loss) }}>${trade.profit_loss?.toFixed(2) || '-'}</td>
-                      <td style={{ padding: '12px', fontSize: '14px', color: '#cbd5e1' }}>{trade.win_percentage?.toFixed(2) || '-'}%</td>
-                      <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', background: getStatusColor(trade.status), color: '#fff', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}>{trade.status}</span></td>
-                      <td style={{ padding: '12px', display: 'flex', gap: '4px' }}>
-                        <button onClick={() => handleEditClick(trade)} style={{ background: '#3b82f6', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px' }}>Edit</button>
-                        <button onClick={() => handleDeleteTrade(trade.id)} style={{ background: '#ef4444', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px' }}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* CREATE TAB */}
-      {activeTab === 'create' && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '24px', maxWidth: '600px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px' }}>➕ New Trade</h2>
-          <form onSubmit={handleCreateTrade}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Account *</label>
-              <select value={formData.account_id} onChange={(e) => setFormData({ ...formData, account_id: e.target.value })} style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }}>
-                <option value="">Select Account</option>
-                {accounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>{acc.account_name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Symbol *</label>
-              <input type="text" value={formData.symbol} onChange={(e) => setFormData({ ...formData, symbol: e.target.value })} placeholder="e.g., AAPL" style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }} />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Action *</label>
-                <select value={formData.action} onChange={(e) => setFormData({ ...formData, action: e.target.value })} style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }}>
-                  <option value="BUY">BUY</option>
-                  <option value="SELL">SELL</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Type</label>
-                <select value={formData.trade_type} onChange={(e) => setFormData({ ...formData, trade_type: e.target.value })} style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }}>
-                  <option value="Market">Market</option>
-                  <option value="Limit">Limit</option>
-                  <option value="Stop">Stop</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Entry Price *</label>
-                <input type="number" step="0.01" value={formData.entry_price} onChange={(e) => setFormData({ ...formData, entry_price: e.target.value })} placeholder="0.00" style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Quantity *</label>
-                <input type="number" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} placeholder="0" style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }} />
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Commission</label>
-              <input type="number" step="0.01" value={formData.commission} onChange={(e) => setFormData({ ...formData, commission: e.target.value })} placeholder="0.00" style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }} />
-            </div>
-
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Notes</label>
-              <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Add notes..." style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px', minHeight: '80px' }} />
-            </div>
-
-            <button type="submit" style={{ width: '100%', padding: '10px', background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-              Create Trade
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* EDIT TAB */}
-      {activeTab === 'edit' && editingId && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '24px', maxWidth: '600px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px' }}>✏️ Update Trade</h2>
-          <form onSubmit={(e) => handleUpdateTrade(e, editingId)}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Exit Price</label>
-              <input type="number" step="0.01" value={editFormData.exit_price} onChange={(e) => setEditFormData({ ...editFormData, exit_price: e.target.value })} placeholder="0.00" style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }} />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Status</label>
-              <select value={editFormData.status} onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })} style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }}>
-                <option value="">Select Status</option>
-                <option value="OPEN">OPEN</option>
-                <option value="CLOSED">CLOSED</option>
-                <option value="PENDING">PENDING</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Notes</label>
-              <textarea value={editFormData.notes} onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })} placeholder="Add notes..." style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px', minHeight: '80px' }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="submit" style={{ flex: 1, padding: '10px', background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-                Update Trade
-              </button>
-              <button type="button" onClick={() => { setEditingId(null); setActiveTab('view'); }} style={{ flex: 1, padding: '10px', background: '#6b7280', border: 'none', color: '#fff', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <div className={styles.stats}>
+        <p>Total Trades: <strong>{filteredTrades.length}</strong></p>
+      </div>
     </div>
-  )
+  );
 }

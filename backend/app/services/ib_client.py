@@ -1,7 +1,5 @@
 """
-IB Client Service - FINAL PRODUCTION VERSION
-Real Interactive Brokers Connection with proper response handling
-Complete and tested - place_order returns proper response structure
+FINAL IB_CLIENT.PY - WITH place_order() METHOD AND CONNECTION STATUS
 """
 
 import asyncio
@@ -14,474 +12,232 @@ logger = logging.getLogger(__name__)
 
 class IBClientService:
     """Real Interactive Brokers Client Service"""
-    
+
     def __init__(self):
         self.ib = IB()
         self.connected = False
         self.account_info = {}
         self.account_type = None
         self.account_name = None
-        
-    async def connect(self, account_type: str = "demo", account_name: Optional[str] = None, host: str = "127.0.0.1", port: Optional[int] = None, client_id: int = 1) -> dict:
+
+    async def connect(self, account_type: str = "demo", account_name: Optional[str] = None,
+                     host: str = "127.0.0.1", port: Optional[int] = None, client_id: int = 1) -> dict:
         """Connect to IB TWS with account selection"""
         try:
             account_type = account_type.lower()
             if account_type not in ["demo", "live"]:
-                return {
-                    "status": "error",
-                    "error": "account_type must be 'demo' or 'live'",
-                    "timestamp": datetime.now().isoformat()
-                }
-            
+                return {"status": "error", "error": "account_type must be 'demo' or 'live'"}
+
             if port is None:
-                if account_type == "demo":
-                    port = 7497
-                    account_label = "DEMO (Paper Trading)"
-                else:
-                    port = 7496
-                    account_label = "LIVE (Real Trading) ⚠️"
-            else:
-                account_label = f"Custom Port {port}"
-            
-            self.account_type = account_type
-            self.account_name = account_name
-            
-            logger.info(f"🔌 Connecting to IB {account_label} at {host}:{port}...")
-            if account_name:
-                logger.info(f"   Account: {account_name}")
-            
+                port = 7497 if account_type == "demo" else 7496
+
             await self.ib.connectAsync(host, port, clientId=client_id)
+            await asyncio.sleep(0.5)
+
             self.connected = True
-            
-            await self._update_account_info()
-            
-            logger.info(f"✅ Connected to IB successfully! ({account_label})")
-            
-            return {
-                "status": "success",
-                "connected": True,
-                "message": f"Connected to {account_label}",
-                "account_type": account_type,
-                "account_name": account_name or self.account_info.get("account", "Unknown"),
-                "port": port,
-                "account": self.account_info.get("account", "Unknown"),
-                "buying_power": self.account_info.get("buying_power", 0),
-                "equity": self.account_info.get("equity", 0),
-                "timestamp": datetime.now().isoformat()
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Connection failed: {str(e)}")
-            self.connected = False
-            return {
-                "status": "error",
-                "connected": False,
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-    
-    async def disconnect(self) -> dict:
-        """Disconnect from IB"""
-        try:
-            if self.connected:
-                self.ib.disconnect()
-                self.connected = False
-                self.account_type = None
-                self.account_name = None
-                logger.info("✅ Disconnected from IB")
-            
-            return {
-                "status": "success",
-                "connected": False,
-                "message": "Disconnected from IB",
-                "timestamp": datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.error(f"❌ Disconnection error: {str(e)}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-    
-    def is_connected(self) -> bool:
-        """Check if connected to IB"""
-        return self.ib.isConnected()
-    
-    async def _update_account_info(self):
-        """Get account information from IB"""
-        try:
-            account_values = self.ib.accountValues()
-            
-            for val in account_values:
-                if val.tag == "TotalCashValue":
-                    self.account_info["cash"] = float(val.value)
-                elif val.tag == "EquityWithLoanValue":
-                    self.account_info["equity"] = float(val.value)
-                elif val.tag == "BuyingPower":
-                    self.account_info["buying_power"] = float(val.value)
-                elif val.tag == "NetLiquidation":
-                    self.account_info["net_liquidation"] = float(val.value)
-                elif val.tag == "MaintMarginReq":
-                    self.account_info["maint_margin"] = float(val.value)
-            
-            managed_accounts = self.ib.managedAccounts()
-            if managed_accounts:
-                self.account_info["account"] = managed_accounts[0]
-            
-            logger.info(f"📊 Account info updated: {self.account_info}")
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to get account info: {str(e)}")
-    
-    async def get_account_info(self) -> dict:
-        """Get current account information"""
-        try:
-            await self._update_account_info()
-            
-            return {
-                "status": "success",
-                "account_type": self.account_type or "unknown",
-                "account_name": self.account_name,
-                "account": self.account_info.get("account", "Unknown"),
-                "cash": self.account_info.get("cash", 0),
-                "equity": self.account_info.get("equity", 0),
-                "buying_power": self.account_info.get("buying_power", 0),
-                "net_liquidation": self.account_info.get("net_liquidation", 0),
-                "maint_margin": self.account_info.get("maint_margin", 0),
-                "timestamp": datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.error(f"❌ Error getting account info: {str(e)}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-    
-    async def build_contract(self, contract_type: str, **kwargs) -> Optional[Contract]:
-        """Build contract based on type - ASYNC VERSION"""
-        try:
-            if contract_type.lower() == "stock":
-                contract = Stock(
-                    symbol=kwargs.get("symbol"),
-                    exchange=kwargs.get("exchange", "SMART"),
-                    currency="USD"
-                )
-                logger.info(f"📈 Stock contract: {kwargs.get('symbol')}")
-                
-            elif contract_type.lower() == "forex":
-                pair = kwargs.get("pair", "EURUSD")
-                contract = Forex(pair=pair)
-                logger.info(f"💱 Forex contract: {pair}")
-                
-            elif contract_type.lower() == "future":
-                contract = Future(
-                    symbol=kwargs.get("symbol"),
-                    exchange=kwargs.get("exchange", "CME"),
-                    lastTradeDateOrContractMonth=kwargs.get("expiry", ""),
-                    currency="USD"
-                )
-                logger.info(f"📊 Future contract: {kwargs.get('symbol')}")
-                
-            elif contract_type.lower() == "crypto":
-                contract = Crypto(
-                    symbol=kwargs.get("symbol"),
-                    exchange=kwargs.get("exchange", "PAXOS")
-                )
-                logger.info(f"🪙 Crypto contract: {kwargs.get('symbol')}")
-                
-            elif contract_type.lower() == "option":
-                contract = Option(
-                    symbol=kwargs.get("symbol"),
-                    lastTradeDateOrContractMonth=kwargs.get("expiry"),
-                    strike=float(kwargs.get("strike")),
-                    right=kwargs.get("right", "CALL"),
-                    exchange=kwargs.get("exchange", "SMART")
-                )
-                logger.info(f"📉 Option contract: {kwargs.get('symbol')} {kwargs.get('strike')} {kwargs.get('right')}")
-                
+            self.account_type = account_type
+
+            accounts = [acc for acc in self.ib.managedAccounts()]
+            if not accounts:
+                return {"status": "error", "error": "No accounts found"}
+
+            if account_name and account_name in accounts:
+                self.account_name = account_name
             else:
-                logger.error(f"❌ Unknown contract type: {contract_type}")
-                return None
-            
-            # Use async version
-            qualified = await self.ib.qualifyContractsAsync(contract)
-            if qualified:
-                return qualified[0]
-            return contract
-            
-        except Exception as e:
-            logger.error(f"❌ Error building contract: {str(e)}")
-            return None
-    
-    async def get_market_data(self, contract_type: str, **kwargs) -> dict:
-        """Get real-time market data for a contract"""
-        try:
-            contract = await self.build_contract(contract_type, **kwargs)
-            if not contract:
-                return {"status": "error", "error": "Invalid contract"}
-            
-            ticker = self.ib.reqMktData(contract, "", False, False)
-            await asyncio.sleep(1)
-            
-            logger.info(f"📊 Market data for {kwargs}: {ticker}")
-            
+                self.account_name = accounts[0]
+
+            await asyncio.sleep(0.5)
+            account_values = self.ib.accountValues(self.account_name)
+            self.account_info = {
+                "account": self.account_name,
+                "type": account_type,
+                "buying_power": self._get_account_value(account_values, "BuyingPower"),
+                "equity": self._get_account_value(account_values, "TotalCashValue"),
+                "maint_margin": self._get_account_value(account_values, "MaintMarginReq"),
+                "net_liquidation": self._get_account_value(account_values, "NetLiquidation"),
+                "cash": self._get_account_value(account_values, "CashBalance"),
+            }
+
+            logger.info(f"✅ Connected to IB: {self.account_name} ({account_type})")
             return {
                 "status": "success",
-                "symbol": kwargs.get("symbol"),
-                "contract_type": contract_type,
-                "last_price": ticker.last or 0,
-                "bid": ticker.bid or 0,
-                "ask": ticker.ask or 0,
-                "bid_size": ticker.bidSize or 0,
-                "ask_size": ticker.askSize or 0,
-                "volume": ticker.volume or 0,
-                "open": ticker.open or 0,
-                "high": ticker.high or 0,
-                "low": ticker.low or 0,
-                "close": ticker.close or 0,
-                "timestamp": datetime.now().isoformat()
+                "account": self.account_name,
+                "account_type": account_type,
+                "info": self.account_info
             }
-            
+
         except Exception as e:
-            logger.error(f"❌ Error getting market data: {str(e)}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-    
-    async def get_positions(self) -> dict:
-        """Get all open positions"""
+            logger.error(f"❌ Connection error: {str(e)}")
+            return {"status": "error", "error": str(e)}
+
+    def _get_account_value(self, account_values, tag: str) -> float:
+        """Extract account value by tag"""
         try:
-            positions_list = []
-            
-            # Get portfolio items
-            portfolio_items = self.ib.portfolio()
-            
-            for item in portfolio_items:
-                try:
-                    positions_list.append({
-                        "account": item.account,
-                        "symbol": item.contract.symbol,
-                        "contract_type": self._get_contract_type(item.contract),
-                        "quantity": item.position,
-                        "avg_cost": item.averageCost,
-                        "market_price": item.marketPrice,
-                        "market_value": item.marketValue,
-                        "unrealized_pnl": item.unrealizedPNL,
-                        "realized_pnl": item.realizedPNL,
-                        "timestamp": datetime.now().isoformat()
-                    })
-                except Exception as e:
-                    logger.warning(f"Error processing position: {e}")
-            
-            logger.info(f"📊 Retrieved {len(positions_list)} positions")
-            
-            return {
-                "status": "success",
-                "positions": positions_list,
-                "count": len(positions_list),
-                "timestamp": datetime.now().isoformat()
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error getting positions: {str(e)}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "positions": [],
-                "count": 0,
-                "timestamp": datetime.now().isoformat()
-            }
-    
-    async def place_order(self, contract_type: str, action: str, quantity: int, order_type: str = "MKT", limit_price: Optional[float] = None, **kwargs) -> dict:
-        """
-        Place an order - FINAL WORKING VERSION
-        ALWAYS returns dict with status field
-        """
-        logger.info(f"📤 place_order called: {action} {quantity} {kwargs.get('symbol')}")
-        
+            for val in account_values:
+                if val.tag == tag:
+                    return float(val.value)
+            return 0.0
+        except:
+            return 0.0
+
+    def is_connected(self) -> bool:
+        """Check if connected"""
+        return self.connected and self.ib.isConnected()
+
+    async def get_positions(self) -> list:
+        """Get current positions"""
         try:
-            contract = await self.build_contract(contract_type, **kwargs)
-            if not contract:
-                logger.error("Failed to build contract")
-                return {
-                    "status": "error",
-                    "error": "Invalid contract",
-                    "timestamp": datetime.now().isoformat()
-                }
-            
-            logger.info(f"✅ Contract built successfully")
-            
-            # Create order
-            try:
-                if order_type == "MKT":
-                    order = MarketOrder(action, quantity)
-                    logger.info(f"Created MarketOrder")
-                elif order_type == "LMT":
-                    if not limit_price:
-                        return {
-                            "status": "error",
-                            "error": "Limit price required for limit orders",
-                            "timestamp": datetime.now().isoformat()
-                        }
-                    order = LimitOrder(action, quantity, limit_price)
-                    logger.info(f"Created LimitOrder with price {limit_price}")
-                else:
-                    order = MarketOrder(action, quantity)
-                    logger.info(f"Created default MarketOrder")
-            except Exception as e:
-                logger.error(f"❌ Error creating order: {str(e)}")
-                return {
-                    "status": "error",
-                    "error": f"Error creating order: {str(e)}",
-                    "timestamp": datetime.now().isoformat()
-                }
-            
-            # Place order on IB
-            try:
-                trade = self.ib.placeOrder(contract, order)
-                await asyncio.sleep(0.5)
-                
-                order_id = trade.order.orderId
-                symbol = kwargs.get("symbol", "UNKNOWN")
-                
-                logger.info(f"✅ Order placed successfully: {action} {quantity} {symbol} - Order ID: {order_id}")
-                
-                # CRITICAL: Always return success response with all fields
-                response = {
-                    "status": "success",
-                    "order_id": order_id,
-                    "symbol": symbol,
-                    "contract_type": contract_type,
-                    "action": action,
-                    "quantity": quantity,
-                    "order_type": order_type,
-                    "status_detail": trade.orderStatus.status,
-                    "filled": trade.orderStatus.filled,
-                    "remaining": trade.orderStatus.remaining,
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-                logger.info(f"📤 Returning response: {response}")
-                return response
-                
-            except Exception as e:
-                logger.error(f"❌ Error placing order on IB: {str(e)}")
-                return {
-                    "status": "error",
-                    "error": f"Error placing order: {str(e)}",
-                    "timestamp": datetime.now().isoformat()
-                }
-            
-        except Exception as e:
-            logger.error(f"❌ Unexpected error in place_order: {str(e)}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-    
-    async def get_orders(self) -> dict:
-        """Get all open orders"""
-        try:
-            orders_list = []
-            trades = self.ib.trades()
-            
-            for trade in trades:
-                orders_list.append({
-                    "order_id": trade.order.orderId,
-                    "symbol": trade.contract.symbol,
-                    "contract_type": self._get_contract_type(trade.contract),
-                    "action": trade.order.action,
-                    "quantity": trade.order.totalQuantity,
-                    "order_type": trade.order.orderType,
-                    "limit_price": trade.order.lmtPrice if trade.order.lmtPrice else None,
-                    "status": trade.orderStatus.status,
-                    "filled": trade.orderStatus.filled,
-                    "remaining": trade.orderStatus.remaining,
-                    "avg_fill_price": trade.orderStatus.avgFillPrice,
-                    "timestamp": datetime.now().isoformat()
+            positions = []
+            for position in self.ib.positions():
+                positions.append({
+                    "symbol": position.contract.symbol,
+                    "position": position.position,
+                    "avgCost": position.avgCost,
+                    "account": position.account,
                 })
-            
-            logger.info(f"📋 Retrieved {len(orders_list)} open orders")
-            
-            return {
-                "status": "success",
-                "orders": orders_list,
-                "count": len(orders_list),
-                "timestamp": datetime.now().isoformat()
-            }
-            
+            return positions
         except Exception as e:
-            logger.error(f"❌ Error getting orders: {str(e)}")
+            logger.error(f"Error getting positions: {str(e)}")
+            return []
+
+    async def get_account_info(self) -> dict:
+        """Get account information"""
+        try:
+            if not self.is_connected():
+                return {"status": "error", "error": "Not connected"}
+            account_values = self.ib.accountValues(self.account_name)
             return {
-                "status": "error",
-                "error": str(e),
-                "orders": [],
-                "count": 0,
+                "account": self.account_name,
+                "buying_power": self._get_account_value(account_values, "BuyingPower"),
+                "equity": self._get_account_value(account_values, "TotalCashValue"),
+                "maint_margin": self._get_account_value(account_values, "MaintMarginReq"),
+                "net_liquidation": self._get_account_value(account_values, "NetLiquidation"),
+                "cash": self._get_account_value(account_values, "CashBalance"),
+            }
+        except Exception as e:
+            logger.error(f"Error getting account info: {str(e)}")
+            return {}
+
+    # ✅ THIS METHOD IS THE KEY FIX
+    def get_connection_status(self):
+        """Returns connection status for IB client."""
+        status = {
+            "connected": self.is_connected(),
+            "account_name": self.account_name,
+            "account_type": self.account_type,
+            "account_info": self.account_info,
+        }
+        if self.is_connected():
+            status["message"] = "Connected"
+        else:
+            status["message"] = "Disconnected"
+        return status
+
+    async def place_order(self, symbol: str, action: str, quantity: int,
+                         order_type: str = "MKT", limit_price: Optional[float] = None) -> dict:
+        """Place an order on IB"""
+        try:
+            print(f"\n📤 PLACE ORDER: {action} {quantity} {symbol}")
+
+            if not self.is_connected():
+                print("❌ Not connected to IB")
+                return {"success": False, "error": "Not connected to IB"}
+
+            contract = None
+            if symbol.upper() == "EURUSD":
+                contract = Forex(pair="EURUSD")
+                print(f"💱 Forex: {symbol}")
+            elif symbol.upper() in ["ES", "NQ", "YM", "GC", "CL"]:
+                contract = Future(symbol=symbol.upper(), exchange="CME")
+                print(f"📊 Futures: {symbol}")
+            else:
+                contract = Stock(symbol=symbol.upper(), exchange="SMART", currency="USD")
+                print(f"📈 Stock: {symbol}")
+
+            qualified_contracts = await self.ib.qualifyContractsAsync(contract)
+            if not qualified_contracts:
+                print(f"❌ Could not qualify contract: {symbol}")
+                return {"success": False, "error": f"Invalid contract: {symbol}"}
+
+            contract = qualified_contracts[0]
+            print(f"✅ Contract qualified")
+
+            if order_type.upper() == "MKT":
+                order = MarketOrder(action, quantity)
+                print(f"📊 Order type: MARKET")
+            elif order_type.upper() == "LMT":
+                if not limit_price:
+                    return {"success": False, "error": "limit_price required for LMT orders"}
+                order = LimitOrder(action, quantity, limit_price)
+                print(f"📊 Order type: LIMIT @ {limit_price}")
+            else:
+                return {"success": False, "error": f"Unknown order type: {order_type}"}
+
+            print(f"🚀 Placing order...")
+            trade = self.ib.placeOrder(contract, order)
+
+            await asyncio.sleep(0.5)
+
+            order_id = trade.order.orderId
+            order_status = trade.orderStatus.status if trade.orderStatus else "PENDING"
+
+            print(f"✅ Order placed! ID: {order_id}, Status: {order_status}")
+            print("=" * 60 + "\n")
+
+            return {
+                "success": True,
+                "order_id": order_id,
+                "symbol": symbol,
+                "action": action,
+                "quantity": quantity,
+                "order_type": order_type,
+                "limit_price": limit_price,
+                "status": order_status,
                 "timestamp": datetime.now().isoformat()
             }
-    
-    async def cancel_order(self, order_id: int) -> dict:
-        """Cancel an order"""
+        except Exception as e:
+            print(f"❌ Order error: {str(e)}")
+            print("=" * 60 + "\n")
+            return {
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+
+    async def get_order_status(self, order_id: int) -> dict:
+        """Get status of a placed order"""
         try:
-            trades = self.ib.trades()
-            for trade in trades:
+            for trade in self.ib.trades():
                 if trade.order.orderId == order_id:
-                    self.ib.cancelOrder(trade.order)
-                    await asyncio.sleep(0.5)
-                    logger.info(f"✅ Order {order_id} cancelled")
                     return {
-                        "status": "success",
+                        "success": True,
                         "order_id": order_id,
-                        "message": f"Order {order_id} cancelled",
+                        "status": trade.orderStatus.status,
+                        "filled": trade.orderStatus.filled,
+                        "remaining": trade.orderStatus.remaining,
+                        "avg_fill_price": trade.orderStatus.avgFillPrice,
                         "timestamp": datetime.now().isoformat()
                     }
-            
             return {
-                "status": "error",
+                "success": False,
                 "error": f"Order {order_id} not found",
                 "timestamp": datetime.now().isoformat()
             }
-            
         except Exception as e:
-            logger.error(f"❌ Error cancelling order: {str(e)}")
             return {
-                "status": "error",
+                "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
-    
-    def _get_contract_type(self, contract: Contract) -> str:
-        """Get contract type name"""
-        if isinstance(contract, Stock):
-            return "stock"
-        elif isinstance(contract, Forex):
-            return "forex"
-        elif isinstance(contract, Future):
-            return "future"
-        elif isinstance(contract, Crypto):
-            return "crypto"
-        elif isinstance(contract, Option):
-            return "option"
-        else:
-            return "unknown"
-    
-    async def get_connection_status(self) -> dict:
-        """Get current connection status"""
-        return {
-            "connected": self.is_connected(),
-            "account_type": self.account_type or "unknown",
-            "account_name": self.account_name,
-            "account": self.account_info.get("account", "Unknown"),
-            "equity": self.account_info.get("equity", 0),
-            "buying_power": self.account_info.get("buying_power", 0),
-            "timestamp": datetime.now().isoformat()
-        }
 
+    async def disconnect(self):
+        """Disconnect from IB"""
+        try:
+            self.ib.disconnect()
+            self.connected = False
+            logger.info("✅ Disconnected from IB")
+        except Exception as e:
+            logger.error(f"Error disconnecting: {str(e)}")
 
-# Global IB client instance
+# Global instance
 ib_client = IBClientService()
