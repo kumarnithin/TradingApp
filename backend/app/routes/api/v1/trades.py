@@ -12,7 +12,7 @@ Location: /backend/app/routes/api/v1/trades.py
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from sqlalchemy.orm import Session
 from app.config import get_db
-from app.database import Trade, Account, Signal
+from app.database import Trade, Account, Signal, User
 from datetime import datetime, timedelta
 from typing import Optional
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Trades"])
 
 class TradeCreate(BaseModel):
+    user_id: int
     account_id: str
     symbol: str
     action: str
@@ -52,13 +53,20 @@ def calculate_profit_loss(entry_price: float, exit_price: Optional[float], quant
 @router.post("/create")
 async def create_trade(trade_data: TradeCreate, db: Session = Depends(get_db)):
     try:
+        # Validate account
         account = db.query(Account).filter(Account.id == trade_data.account_id).first()
         if not account:
             raise HTTPException(status_code=404, detail="Account not found")
-        
+
+        # Validate user exists
+        user = db.query(User).filter(User.id == trade_data.user_id).first()
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid user_id: user not found")
+
         trade = Trade(
             id=str(uuid.uuid4()),
             account_id=trade_data.account_id,
+            user_id=trade_data.user_id,
             symbol=trade_data.symbol.upper(),
             action=trade_data.action.upper(),
             entry_price=trade_data.entry_price,
