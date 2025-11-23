@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './lit.module.css'
+import logger from '../../../utils/logger'
 
 // Import all LIT components
 import OrderFlowDashboard from './components/OrderFlowDashboard'
@@ -53,7 +54,7 @@ export default function LITPage() {
       setLitMetrics(response.data)
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching LIT data:', error)
+      logger.error('Error fetching LIT data:', error)
       // Use mock data if API fails
       setLitMetrics({
         orderFlow: {

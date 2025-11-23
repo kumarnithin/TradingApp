@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -58,7 +59,7 @@ export default function SignalsPage() {
           setAccounts(res.data.accounts)
         }
       } catch (e) {
-        console.error('Error fetching accounts:', e)
+        logger.error('Error fetching accounts:', e)
       }
     }
     fetchAccounts()
@@ -91,7 +92,7 @@ export default function SignalsPage() {
       }
       setError(null)
     } catch (e) {
-      console.error('Error fetching signals:', e)
+      logger.error('Error fetching signals:', e)
       setError('Failed to fetch signals')
       setSignals([])
     } finally {

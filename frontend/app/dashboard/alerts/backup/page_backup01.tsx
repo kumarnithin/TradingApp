@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './alerts.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -32,10 +33,10 @@ interface AlertHistory {
 }
 
 const ALERT_TYPES = [
-  { value: 'PRICE', label: 'Price Alert', icon: '💰', color: '#8AB4F8' },
-  { value: 'TRADE', label: 'Trade Alert', icon: '📊', color: '#22c55e' },
-  { value: 'ACCOUNT', label: 'Account Alert', icon: '⚠️', color: '#f97316' },
-  { value: 'STRATEGY', label: 'Strategy Alert', icon: '🎯', color: '#a855f7' }
+  { value: 'PRICE', label: 'Price Alert', icon: 'ðŸ’°', color: '#8AB4F8' },
+  { value: 'TRADE', label: 'Trade Alert', icon: 'ðŸ“Š', color: '#22c55e' },
+  { value: 'ACCOUNT', label: 'Account Alert', icon: 'âš ï¸', color: '#f97316' },
+  { value: 'STRATEGY', label: 'Strategy Alert', icon: 'ðŸŽ¯', color: '#a855f7' }
 ]
 
 const PRICE_CONDITIONS = [
@@ -79,7 +80,7 @@ export default function AlertsPage() {
       setAlerts(response.data)
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching alerts:', error)
+      logger.error('Error fetching alerts:', error)
       setLoading(false)
     }
   }
@@ -91,7 +92,7 @@ export default function AlertsPage() {
       const unread = response.data.filter((h: AlertHistory) => !h.read).length
       setUnreadCount(unread)
     } catch (error) {
-      console.error('Error fetching alert history:', error)
+      logger.error('Error fetching alert history:', error)
     }
   }
 
@@ -116,7 +117,7 @@ export default function AlertsPage() {
       fetchAlerts()
       alert('Alert created successfully!')
     } catch (error) {
-      console.error('Error creating alert:', error)
+      logger.error('Error creating alert:', error)
       alert('Failed to create alert')
     }
   }
@@ -126,7 +127,7 @@ export default function AlertsPage() {
       await axios.patch(`${API_URL}/api/v1/alerts/${alertId}`, { enabled: !enabled })
       fetchAlerts()
     } catch (error) {
-      console.error('Error toggling alert:', error)
+      logger.error('Error toggling alert:', error)
     }
   }
 
@@ -138,7 +139,7 @@ export default function AlertsPage() {
       fetchAlerts()
       alert('Alert deleted successfully!')
     } catch (error) {
-      console.error('Error deleting alert:', error)
+      logger.error('Error deleting alert:', error)
     }
   }
 
@@ -147,7 +148,7 @@ export default function AlertsPage() {
       await axios.patch(`${API_URL}/api/v1/alerts/history/${historyId}`, { read: true })
       fetchAlertHistory()
     } catch (error) {
-      console.error('Error marking as read:', error)
+      logger.error('Error marking as read:', error)
     }
   }
 
@@ -168,7 +169,7 @@ export default function AlertsPage() {
       {/* Header */}
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>🔔 Alert Management</h1>
+          <h1 className={styles.pageTitle}>ðŸ”” Alert Management</h1>
           <p className={styles.pageSubtitle}>Create and monitor trading alerts</p>
         </div>
         <button className={styles.createButton} onClick={() => setShowCreateModal(true)}>
@@ -202,7 +203,7 @@ export default function AlertsPage() {
           <div className={styles.modalContent}>
             <div className={styles.modalHeader}>
               <h2>Create New Alert</h2>
-              <button className={styles.closeButton} onClick={() => setShowCreateModal(false)}>✕</button>
+              <button className={styles.closeButton} onClick={() => setShowCreateModal(false)}>âœ•</button>
             </div>
 
             <div className={styles.modalBody}>
@@ -340,9 +341,9 @@ export default function AlertsPage() {
                         }}
                       />
                       <span>
-                        {channel === 'in_app' && '🌐 In-App'}
-                        {channel === 'email' && '📧 Email'}
-                        {channel === 'sound' && '🔊 Sound'}
+                        {channel === 'in_app' && 'ðŸŒ In-App'}
+                        {channel === 'email' && 'ðŸ“§ Email'}
+                        {channel === 'sound' && 'ðŸ”Š Sound'}
                       </span>
                     </label>
                   ))}
@@ -364,7 +365,7 @@ export default function AlertsPage() {
 
       {/* Active Alerts */}
       <div className={`${styles.section} glass-light`}>
-        <h2 className={styles.sectionTitle}>📍 Active Alerts</h2>
+        <h2 className={styles.sectionTitle}>ðŸ“ Active Alerts</h2>
         {alerts.filter(a => a.enabled).length > 0 ? (
           <div className={styles.alertsList}>
             {alerts.filter(a => a.enabled).map(alert => (
@@ -385,9 +386,9 @@ export default function AlertsPage() {
                   <div className={styles.alertChannels}>
                     {alert.channels.map(c => (
                       <span key={c} className={styles.channelBadge}>
-                        {c === 'in_app' && '🌐'}
-                        {c === 'email' && '📧'}
-                        {c === 'sound' && '🔊'}
+                        {c === 'in_app' && 'ðŸŒ'}
+                        {c === 'email' && 'ðŸ“§'}
+                        {c === 'sound' && 'ðŸ”Š'}
                       </span>
                     ))}
                   </div>
@@ -396,13 +397,13 @@ export default function AlertsPage() {
                       className={styles.btnToggle}
                       onClick={() => handleToggleAlert(alert.id, alert.enabled)}
                     >
-                      ⏸ Pause
+                      â¸ Pause
                     </button>
                     <button
                       className={styles.btnDelete}
                       onClick={() => handleDeleteAlert(alert.id)}
                     >
-                      🗑️ Delete
+                      ðŸ—‘ï¸ Delete
                     </button>
                   </div>
                 </div>
@@ -417,7 +418,7 @@ export default function AlertsPage() {
       {/* Inactive Alerts */}
       {alerts.filter(a => !a.enabled).length > 0 && (
         <div className={`${styles.section} glass-light`}>
-          <h2 className={styles.sectionTitle}>⏸️ Inactive Alerts</h2>
+          <h2 className={styles.sectionTitle}>â¸ï¸ Inactive Alerts</h2>
           <div className={styles.alertsList}>
             {alerts.filter(a => !a.enabled).map(alert => (
               <div key={alert.id} className={`${styles.alertItem} ${styles.inactive}`}>
@@ -434,7 +435,7 @@ export default function AlertsPage() {
                   className={styles.btnReactivate}
                   onClick={() => handleToggleAlert(alert.id, alert.enabled)}
                 >
-                  ▶ Activate
+                  â–¶ Activate
                 </button>
               </div>
             ))}
@@ -444,7 +445,7 @@ export default function AlertsPage() {
 
       {/* Alert History */}
       <div className={`${styles.section} glass-light`}>
-        <h2 className={styles.sectionTitle}>📜 Alert History (Last 50)</h2>
+        <h2 className={styles.sectionTitle}>ðŸ“œ Alert History (Last 50)</h2>
         {alertHistory.length > 0 ? (
           <div className={styles.historyList}>
             {alertHistory.map(history => (
@@ -454,9 +455,9 @@ export default function AlertsPage() {
               >
                 <div className={styles.historyLeft}>
                   <span className={`${styles.severityIcon} ${styles[`severity_${history.severity.toLowerCase()}`]}`}>
-                    {history.severity === 'CRITICAL' && '🚨'}
-                    {history.severity === 'WARNING' && '⚠️'}
-                    {history.severity === 'INFO' && 'ℹ️'}
+                    {history.severity === 'CRITICAL' && 'ðŸš¨'}
+                    {history.severity === 'WARNING' && 'âš ï¸'}
+                    {history.severity === 'INFO' && 'â„¹ï¸'}
                   </span>
                   <div>
                     <h5 className={styles.historyTitle}>{history.title}</h5>
@@ -471,7 +472,7 @@ export default function AlertsPage() {
                     className={styles.btnMarkRead}
                     onClick={() => handleMarkAsRead(history.id)}
                   >
-                    ✓ Mark Read
+                    âœ“ Mark Read
                   </button>
                 )}
               </div>

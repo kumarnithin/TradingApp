@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -27,11 +28,25 @@ interface ConnectionStatus {
 
 export default function SettingsPage() {
   const [availableAccounts, setAvailableAccounts] = useState<IBAccount[]>([])
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({ connected: false })
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('ib_connection_status') : null
+      return raw ? JSON.parse(raw) : { connected: false }
+    } catch (e) {
+      return { connected: false }
+    }
+  })
   const [loading, setLoading] = useState(false)
   const [scanningAccounts, setScanningAccounts] = useState(false)
   const [selectedAccountType, setSelectedAccountType] = useState<'demo' | 'live'>('demo')
-  const [connectionHistory, setConnectionHistory] = useState<any[]>([])
+  const [connectionHistory, setConnectionHistory] = useState<any[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('ib_connection_history') : null
+      return raw ? JSON.parse(raw) : []
+    } catch (e) {
+      return []
+    }
+  })
 
   useEffect(() => {
     checkConnectionStatus()
@@ -39,12 +54,49 @@ export default function SettingsPage() {
     return () => clearInterval(interval)
   }, [])
 
+  // Persist connectionStatus whenever it changes
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem('ib_connection_status', JSON.stringify(connectionStatus))
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [connectionStatus])
+
+  // Persist connectionHistory whenever it changes
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem('ib_connection_history', JSON.stringify(connectionHistory))
+    } catch (e) {
+      // ignore
+    }
+  }, [connectionHistory])
+
   const checkConnectionStatus = async () => {
     try {
       const response = await axios.get(`${API_URL}/api/v1/ib/connection-status`)
-      setConnectionStatus(response.data)
+      const data = response.data || {}
+      // If backend reports disconnected, clear local connection details.
+      if (data.connected === false) {
+        setConnectionStatus({ connected: false })
+      } else if (data.connected === true) {
+        // Merge backend data with any existing local fields so we don't lose account_name set by handleConnect
+        setConnectionStatus((prev) => ({
+          ...prev,
+          ...data,
+          account_name: data.account_name ?? prev.account_name,
+          account_type: data.account_type ?? prev.account_type,
+          equity: data.equity ?? prev.equity,
+          buying_power: data.buying_power ?? prev.buying_power,
+          timestamp: data.timestamp ?? prev.timestamp,
+          connected: true
+        }))
+      } else {
+        // Fallback: merge if partial data
+        setConnectionStatus((prev) => ({ ...prev, ...data }))
+      }
     } catch (error) {
-      console.error('Error checking connection:', error)
+      logger.error('Error checking connection:', error)
       setConnectionStatus({ connected: false })
     }
   }
@@ -83,12 +135,17 @@ export default function SettingsPage() {
       })
       
       if (response.data.status === 'success') {
-        setConnectionStatus({
-          connected: true,
-          account_name: account.account_name,
-          account_type: account.account_type,
-          ...response.data
-        })
+          // Merge and persist
+          setConnectionStatus((prev) => ({
+            ...prev,
+            connected: true,
+            account_name: account.account_name,
+            account_type: account.account_type,
+            equity: response.data.info?.equity ?? response.data.equity ?? prev.equity,
+            buying_power: response.data.info?.buying_power ?? response.data.buying_power ?? prev.buying_power,
+            timestamp: response.data.timestamp ?? prev.timestamp,
+            ...response.data
+          }))
         addToHistory('success', `✅ Connected to ${account.account_name}`)
       } else {
         addToHistory('error', `Failed to connect: ${response.data.error}`)
@@ -122,7 +179,7 @@ export default function SettingsPage() {
       message,
       timestamp: new Date().toISOString()
     }
-    setConnectionHistory([newEntry, ...connectionHistory.slice(0, 9)])
+      setConnectionHistory((prev) => [newEntry, ...prev.slice(0, 9)])
   }
 
   return (

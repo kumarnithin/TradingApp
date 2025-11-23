@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -69,7 +70,7 @@ export default function PortfolioPage() {
         setFilteredSymbols(res.data.symbols || [])
         setPriceUpdateStatus(`Auto-update: ON (${new Date().toLocaleTimeString()})`)
       } catch (e) {
-        console.error('Price update error:', e)
+        logger.error('Price update error:', e)
       }
     }, 10000) // Update every 10 seconds
 
@@ -84,7 +85,7 @@ export default function PortfolioPage() {
         setActiveCategory(res.data.categories[0].id)
       }
     } catch (e) {
-      console.error(e)
+      logger.error('Error fetching categories:', e)
     }
   }
 
@@ -95,7 +96,7 @@ export default function PortfolioPage() {
       setFilteredSymbols(res.data.symbols || [])
       setSearchQuery('')
     } catch (e) {
-      console.error(e)
+      logger.error('Error fetching symbols:', e)
     }
   }
 
@@ -590,7 +591,7 @@ function TradingViewChart({ symbol }: { symbol: string }) {
             allow_symbol_change: true,
           })
         } catch (e) {
-          console.error(e)
+          logger.error(e)
         }
       }
     }

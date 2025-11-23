@@ -68,42 +68,45 @@ async def receive_tradingview_signal(
 ):
     """📨 RECEIVE TRADINGVIEW WEBHOOK ALERTS"""
     
-    print("\n" + "=" * 60)
-    print("🚨 TRADINGVIEW ALERT RECEIVED!")
-    print("=" * 60)
-    
+    logger.info("%s", "=" * 60)
+    logger.info("🚨 TRADINGVIEW ALERT RECEIVED!")
+    logger.info("%s", "=" * 60)
+
     TRADINGVIEW_PASSPHRASE = "Nits@signal"
-    
+
     try:
         body = await request.json()
-        print(f"📨 Body: {body}")
-        
+        safe_body = dict(body) if isinstance(body, dict) else body
+        if isinstance(safe_body, dict) and 'passphrase' in safe_body:
+            safe_body['passphrase'] = 'REDACTED'
+        logger.debug("📨 Body: %s", safe_body)
+
         passphrase = body.get("passphrase", "")
-        print(f"🔐 Passphrase: {passphrase}")
-        
+        logger.debug("🔐 Passphrase received (redacted)")
+
         if passphrase != TRADINGVIEW_PASSPHRASE:
-            print(f"❌ MISMATCH!")
+            logger.warning("❌ Passphrase mismatch for incoming webhook")
             raise HTTPException(status_code=401, detail="Invalid passphrase")
-        
-        print("✅ Passphrase OK!")
+
+        logger.info("✅ Passphrase OK!")
         
         ticker = body.get("ticker", "UNKNOWN")
         action = body.get("action", "").upper()
         quantity = int(float(body.get("quantity", 1)))
         price = float(body.get("price", 0))
         
-        print(f"📊 Signal: {action} {quantity} {ticker} @ {price}")
+        logger.info("📊 Signal: %s %s %s @ %s", action, quantity, ticker, price)
         
         if not account_id:
-            print("❌ account_id required!")
+            logger.warning("❌ account_id required!")
             raise HTTPException(status_code=400, detail="account_id required")
         
         account = db.query(Account).filter(Account.id == account_id).first()
         if not account:
-            print(f"❌ Account not found: {account_id}")
+            logger.warning("❌ Account not found: %s", account_id)
             raise HTTPException(status_code=400, detail="Account not found")
-        
-        print(f"✅ Account found: {account_id}")
+
+        logger.info("✅ Account found: %s", account_id)
         
         # ✅ USE RAW SQL INSERT with ALL required fields including user_id
         now = datetime.utcnow()
@@ -132,9 +135,9 @@ async def receive_tradingview_signal(
         signal_id = result.scalar()
         db.commit()
         
-        print(f"💾 Signal saved: {signal_id}")
-        print(f"✅ SUCCESS!")
-        print("=" * 60 + "\n")
+        logger.info("💾 Signal saved: %s", signal_id)
+        logger.info("✅ SUCCESS!")
+        logger.info("%s\n", "=" * 60)
         
         return {
             "status": "success",
@@ -150,8 +153,8 @@ async def receive_tradingview_signal(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ ERROR: {str(e)}")
-        print("=" * 60 + "\n")
+        logger.exception("❌ ERROR: %s", str(e))
+        logger.info("%s\n", "=" * 60)
         raise HTTPException(status_code=400, detail=str(e))
 
 # ==================== CRUD ENDPOINTS ====================

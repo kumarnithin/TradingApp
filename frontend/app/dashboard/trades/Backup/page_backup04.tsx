@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
@@ -87,7 +87,7 @@ export default function TradePage() {
         setOrders(response.data.orders || [])
       }
     } catch (error) {
-      console.error('Error fetching orders:', error)
+      logger.error('Error fetching orders:', error)
     }
   }
 
@@ -98,7 +98,7 @@ export default function TradePage() {
         setPositions(response.data.positions || [])
       }
     } catch (error) {
-      console.error('Error fetching positions:', error)
+      logger.error('Error fetching positions:', error)
     }
   }
 
@@ -135,7 +135,7 @@ export default function TradePage() {
       const response = await axios.post(`${API_URL}/api/v1/ib/orders/place`, orderData)
       
       if (response.data.status === 'success') {
-        addToHistory('success', `✅ Order placed! Order ID: ${response.data.order_id}`)
+        addToHistory('success', `âœ… Order placed! Order ID: ${response.data.order_id}`)
         setSymbol('AAPL')
         setQuantity('10')
         setLimitPrice('')
@@ -159,7 +159,7 @@ export default function TradePage() {
       const response = await axios.delete(`${API_URL}/api/v1/ib/orders/${orderId}`)
       
       if (response.data.status === 'success') {
-        addToHistory('success', `✅ Order ${orderId} cancelled`)
+        addToHistory('success', `âœ… Order ${orderId} cancelled`)
         refreshOrders()
       } else {
         addToHistory('error', `Failed: ${response.data.error}`)
@@ -207,7 +207,7 @@ export default function TradePage() {
       {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-          📈 Trading
+          ðŸ“ˆ Trading
         </h1>
         <p style={{ color: '#666' }}>Execute trades on your connected IB account</p>
       </div>
@@ -225,7 +225,7 @@ export default function TradePage() {
       }}>
         <div>
           <span style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
-            {connectionStatus.connected ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}
+            {connectionStatus.connected ? 'ðŸŸ¢ CONNECTED' : 'ðŸ”´ DISCONNECTED'}
           </span>
           {connectionStatus.connected && connectionStatus.account_name && (
             <div style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
@@ -253,7 +253,7 @@ export default function TradePage() {
               borderRadius: '4px',
               marginBottom: '1.5rem'
             }}>
-              ⚠️ Connect to IB in Settings first!
+              âš ï¸ Connect to IB in Settings first!
             </div>
           )}
 
@@ -279,11 +279,11 @@ export default function TradePage() {
                 fontSize: '1rem'
               }}
             >
-              <option value="stock">📈 Stock</option>
-              <option value="forex">💱 Forex</option>
-              <option value="future">📊 Futures</option>
-              <option value="crypto">🪙 Crypto</option>
-              <option value="option">📉 Option</option>
+              <option value="stock">ðŸ“ˆ Stock</option>
+              <option value="forex">ðŸ’± Forex</option>
+              <option value="future">ðŸ“Š Futures</option>
+              <option value="crypto">ðŸª™ Crypto</option>
+              <option value="option">ðŸ“‰ Option</option>
             </select>
           </div>
 
@@ -389,7 +389,7 @@ export default function TradePage() {
                   cursor: 'pointer'
                 }}
               >
-                📈 BUY
+                ðŸ“ˆ BUY
               </button>
               <button
                 onClick={() => setAction('SELL')}
@@ -404,7 +404,7 @@ export default function TradePage() {
                   cursor: 'pointer'
                 }}
               >
-                📉 SELL
+                ðŸ“‰ SELL
               </button>
             </div>
           </div>
@@ -487,7 +487,7 @@ export default function TradePage() {
               cursor: connectionStatus.connected && !loading ? 'pointer' : 'not-allowed'
             }}
           >
-            {loading ? '⏳ Placing...' : `📤 Place ${action} Order`}
+            {loading ? 'â³ Placing...' : `ðŸ“¤ Place ${action} Order`}
           </button>
         </div>
 
@@ -518,9 +518,9 @@ export default function TradePage() {
                 }}
               >
                 <div style={{ fontWeight: 'bold' }}>
-                  {sample.type === 'stock' && '📈'} 
-                  {sample.type === 'forex' && '💱'} 
-                  {sample.type === 'crypto' && '🪙'} 
+                  {sample.type === 'stock' && 'ðŸ“ˆ'} 
+                  {sample.type === 'forex' && 'ðŸ’±'} 
+                  {sample.type === 'crypto' && 'ðŸª™'} 
                   {sample.symbol} - {sample.qty} units
                 </div>
                 <div style={{ fontSize: '0.9rem', color: '#666' }}>
@@ -532,7 +532,7 @@ export default function TradePage() {
 
           <div style={{ marginTop: '2rem', padding: '1rem', background: '#f0fdf4', borderRadius: '4px' }}>
             <p style={{ fontSize: '0.9rem', color: '#166534' }}>
-              💡 <strong>Tip:</strong> Demo trades are simulated. Great for testing without risk!
+              ðŸ’¡ <strong>Tip:</strong> Demo trades are simulated. Great for testing without risk!
             </p>
           </div>
         </div>
@@ -547,7 +547,7 @@ export default function TradePage() {
           background: 'white',
           marginBottom: '2rem'
         }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>📋 Open Orders ({orders.length})</h2>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>ðŸ“‹ Open Orders ({orders.length})</h2>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -620,7 +620,7 @@ export default function TradePage() {
           background: 'white',
           marginBottom: '2rem'
         }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>💼 Open Positions ({positions.length})</h2>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>ðŸ’¼ Open Positions ({positions.length})</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
             {positions.map((pos, idx) => (
               <div
@@ -664,7 +664,7 @@ export default function TradePage() {
         padding: '2rem',
         background: 'white'
       }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>📝 Trade History</h2>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>ðŸ“ Trade History</h2>
         <div style={{ 
           border: '1px solid #e5e7eb',
           borderRadius: '8px',
@@ -686,7 +686,7 @@ export default function TradePage() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span>
-                    {entry.type === 'success' ? '✅' : entry.type === 'error' ? '❌' : entry.type === 'warning' ? '⚠️' : 'ℹ️'}
+                    {entry.type === 'success' ? 'âœ…' : entry.type === 'error' ? 'âŒ' : entry.type === 'warning' ? 'âš ï¸' : 'â„¹ï¸'}
                   </span>
                   <span>{entry.message}</span>
                 </div>
@@ -710,11 +710,12 @@ export default function TradePage() {
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export default function SignalsPage() {
-  // 1️⃣ ADD STATE VARIABLES
+  // 1ï¸âƒ£ ADD STATE VARIABLES
   const [signals, setSignals] = useState([])
   const [loading, setLoading] = useState(false)
   
@@ -724,7 +725,7 @@ export default function SignalsPage() {
   const [showAllAccounts, setShowAllAccounts] = useState(false)
   const [isMultiSelect, setIsMultiSelect] = useState(false)
 
-  // 2️⃣ LOAD SAVED FILTER (Run once on mount)
+  // 2ï¸âƒ£ LOAD SAVED FILTER (Run once on mount)
   useEffect(() => {
     const savedShowAll = localStorage.getItem('showAllAccounts')
     const savedAccountId = localStorage.getItem('currentAccountId')
@@ -747,7 +748,7 @@ export default function SignalsPage() {
     }
   }, []) // Empty array = run only once
 
-  // 3️⃣ LISTEN FOR ACCOUNT SWITCHER CHANGES
+  // 3ï¸âƒ£ LISTEN FOR ACCOUNT SWITCHER CHANGES
   useEffect(() => {
     const handleAccountChange = (event) => {
       const { account, showAll, selectedAccounts: selected, isMultiSelect: multiSelect } = event.detail
@@ -774,13 +775,13 @@ export default function SignalsPage() {
     return () => window.removeEventListener('accountChanged', handleAccountChange)
   }, []) // Empty array = run only once
 
-  // 4️⃣ RELOAD DATA WHEN FILTER CHANGES
+  // 4ï¸âƒ£ RELOAD DATA WHEN FILTER CHANGES
   useEffect(() => {
     loadSignals()
   }, [currentAccountId, selectedAccounts, showAllAccounts, isMultiSelect])
   // These 4 variables are dependencies - when ANY change, reload data
 
-  // 5️⃣ BUILD API URL AND FETCH DATA
+  // 5ï¸âƒ£ BUILD API URL AND FETCH DATA
   const loadSignals = async () => {
     try {
       setLoading(true)
@@ -800,12 +801,12 @@ export default function SignalsPage() {
       setSignals(response.data.signals || [])
       setLoading(false)
     } catch (error) {
-      console.error('Error loading signals:', error)
+      logger.error('Error loading signals:', error)
       setLoading(false)
     }
   }
 
-  // 6️⃣ RENDER THE PAGE
+  // 6ï¸âƒ£ RENDER THE PAGE
   return (
     <div style={{ padding: '2rem' }}>
       <h1>Signals</h1>
@@ -820,10 +821,10 @@ export default function SignalsPage() {
         display: 'inline-block'
       }}>
         {isMultiSelect
-          ? `✅ ${selectedAccounts.length} Selected`
+          ? `âœ… ${selectedAccounts.length} Selected`
           : showAllAccounts
-            ? '📊 All Accounts'
-            : '🏢 Single Account'
+            ? 'ðŸ“Š All Accounts'
+            : 'ðŸ¢ Single Account'
         }
       </div>
 

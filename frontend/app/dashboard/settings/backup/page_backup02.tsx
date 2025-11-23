@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './settings.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -115,7 +116,7 @@ export default function IBConnectionSettingsPage() {
         addToHistory('info', 'Accounts loaded from backend')
       }
     } catch (error) {
-      console.warn('Backend not available, using local accounts')
+      logger.warn('Backend not available, using local accounts')
     }
   }
 
@@ -129,7 +130,7 @@ export default function IBConnectionSettingsPage() {
         lastChecked: new Date().toISOString()
       })
     } catch (error) {
-      console.warn('Could not check connection status')
+      logger.warn('Could not check connection status')
       // Set mock status if backend unavailable
       setConnectionStatus({
         isConnected: false,
@@ -169,7 +170,7 @@ export default function IBConnectionSettingsPage() {
         successfulConnections: prev.successfulConnections + 1
       }))
 
-      addToHistory('success', `✓ Successfully connected to ${account.name}`)
+      addToHistory('success', `âœ“ Successfully connected to ${account.name}`)
       
       // Check status after connection
       setTimeout(checkConnectionStatus, 1000)
@@ -179,7 +180,7 @@ export default function IBConnectionSettingsPage() {
         totalConnections: prev.totalConnections + 1,
         failedConnections: prev.failedConnections + 1
       }))
-      addToHistory('error', `✗ Failed to connect to ${account.name}: ${error.message}`)
+      addToHistory('error', `âœ— Failed to connect to ${account.name}: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -196,9 +197,9 @@ export default function IBConnectionSettingsPage() {
           : acc
       ))
 
-      addToHistory('info', `⊗ Disconnected from ${account.name}`)
+      addToHistory('info', `âŠ— Disconnected from ${account.name}`)
     } catch (error: any) {
-      addToHistory('error', `✗ Failed to disconnect: ${error.message}`)
+      addToHistory('error', `âœ— Failed to disconnect: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -213,9 +214,9 @@ export default function IBConnectionSettingsPage() {
         client_id: account.clientId
       }, { timeout: 5000 })
 
-      addToHistory('success', `✓ Connection test passed for ${account.name} (Latency: ${response.data?.latency}ms)`)
+      addToHistory('success', `âœ“ Connection test passed for ${account.name} (Latency: ${response.data?.latency}ms)`)
     } catch (error: any) {
-      addToHistory('warning', `⚠ Connection test failed for ${account.name}`)
+      addToHistory('warning', `âš  Connection test failed for ${account.name}`)
     } finally {
       setTestingConnection(false)
     }
@@ -239,7 +240,7 @@ export default function IBConnectionSettingsPage() {
     }
 
     setAccounts([...accounts, newAccount])
-    addToHistory('info', `✓ Added new account: ${formData.name}`)
+    addToHistory('info', `âœ“ Added new account: ${formData.name}`)
     resetForm()
     setShowAddModal(false)
   }
@@ -263,7 +264,7 @@ export default function IBConnectionSettingsPage() {
         : acc
     ))
 
-    addToHistory('info', `✓ Updated account: ${formData.name}`)
+    addToHistory('info', `âœ“ Updated account: ${formData.name}`)
     resetForm()
     setShowAddModal(false)
   }
@@ -272,7 +273,7 @@ export default function IBConnectionSettingsPage() {
     if (confirm('Are you sure you want to delete this account?')) {
       const accountName = accounts.find(acc => acc.id === accountId)?.name
       setAccounts(accounts.filter(acc => acc.id !== accountId))
-      addToHistory('warning', `⊗ Deleted account: ${accountName}`)
+      addToHistory('warning', `âŠ— Deleted account: ${accountName}`)
     }
   }
 
@@ -326,7 +327,7 @@ export default function IBConnectionSettingsPage() {
       {/* Header */}
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>🔌 IB Connection Settings</h1>
+          <h1 className={styles.pageTitle}>ðŸ”Œ IB Connection Settings</h1>
           <p className={styles.pageSubtitle}>Manage Interactive Brokers connections and account settings</p>
         </div>
         <div className={styles.headerButtons}>
@@ -357,7 +358,7 @@ export default function IBConnectionSettingsPage() {
         <div className={styles.summaryCard}>
           <div className={styles.cardLabel}>Connection Status</div>
           <div className={`${styles.cardValue} ${connectionStatus.isConnected ? styles.positive : styles.negative}`}>
-            {connectionStatus.isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+            {connectionStatus.isConnected ? 'ðŸŸ¢ Connected' : 'ðŸ”´ Disconnected'}
           </div>
           <div className={styles.cardSubtext}>{connectionStatus.latency?.toFixed(0)}ms latency</div>
         </div>
@@ -372,7 +373,7 @@ export default function IBConnectionSettingsPage() {
       <div className={styles.mainGrid}>
         {/* Accounts Section */}
         <div className={`${styles.accountsSection} glass-light`}>
-          <h2 className={styles.sectionTitle}>📋 Configured Accounts</h2>
+          <h2 className={styles.sectionTitle}>ðŸ“‹ Configured Accounts</h2>
 
           <div className={styles.accountsGrid}>
             {accounts.map(account => (
@@ -381,7 +382,7 @@ export default function IBConnectionSettingsPage() {
                 <div className={styles.cardHeader}>
                   <div className={styles.accountTitle}>
                     <span className={styles.icon}>
-                      {account.accountType === 'DEMO' ? '🎯' : '💰'}
+                      {account.accountType === 'DEMO' ? 'ðŸŽ¯' : 'ðŸ’°'}
                     </span>
                     <div>
                       <h3 className={styles.accountName}>{account.name}</h3>
@@ -395,13 +396,13 @@ export default function IBConnectionSettingsPage() {
                     onClick={() => toggleFavorite(account.id)}
                     title={account.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
-                    {account.isFavorite ? '⭐' : '☆'}
+                    {account.isFavorite ? 'â­' : 'â˜†'}
                   </button>
                 </div>
 
                 {/* Connection Status */}
                 <div className={`${styles.statusBadge} ${account.isConnected ? styles.connected : styles.disconnected}`}>
-                  {account.isConnected ? '🟢 CONNECTED' : '⚪ DISCONNECTED'}
+                  {account.isConnected ? 'ðŸŸ¢ CONNECTED' : 'âšª DISCONNECTED'}
                 </div>
 
                 {/* Connection Details */}
@@ -458,7 +459,7 @@ export default function IBConnectionSettingsPage() {
                       onClick={() => handleDisconnect(account)}
                       disabled={loading}
                     >
-                      {loading ? '⊗ Disconnecting...' : '⊗ Disconnect'}
+                      {loading ? 'âŠ— Disconnecting...' : 'âŠ— Disconnect'}
                     </button>
                   ) : (
                     <button
@@ -466,7 +467,7 @@ export default function IBConnectionSettingsPage() {
                       onClick={() => handleConnect(account)}
                       disabled={loading}
                     >
-                      {loading ? '🔄 Connecting...' : '🔗 Connect'}
+                      {loading ? 'ðŸ”„ Connecting...' : 'ðŸ”— Connect'}
                     </button>
                   )}
                   <button
@@ -474,19 +475,19 @@ export default function IBConnectionSettingsPage() {
                     onClick={() => handleTestConnection(account)}
                     disabled={testingConnection || account.isConnected}
                   >
-                    {testingConnection ? '🔄 Testing...' : '🧪 Test'}
+                    {testingConnection ? 'ðŸ”„ Testing...' : 'ðŸ§ª Test'}
                   </button>
                   <button
                     className={`${styles.btn} ${styles.btnSecondary}`}
                     onClick={() => openEditModal(account)}
                   >
-                    ✏️ Edit
+                    âœï¸ Edit
                   </button>
                   <button
                     className={`${styles.btn} ${styles.btnDanger}`}
                     onClick={() => handleDeleteAccount(account.id)}
                   >
-                    🗑️ Delete
+                    ðŸ—‘ï¸ Delete
                   </button>
                 </div>
               </div>
@@ -496,13 +497,13 @@ export default function IBConnectionSettingsPage() {
 
         {/* Connection Health Section */}
         <div className={`${styles.healthSection} glass-light`}>
-          <h2 className={styles.sectionTitle}>💚 Connection Health</h2>
+          <h2 className={styles.sectionTitle}>ðŸ’š Connection Health</h2>
 
           <div className={styles.healthMetrics}>
             <div className={styles.metric}>
               <div className={styles.metricLabel}>Status</div>
               <div className={`${styles.metricValue} ${connectionStatus.isConnected ? styles.healthy : styles.unhealthy}`}>
-                {connectionStatus.isConnected ? '🟢 Healthy' : '🔴 Not Connected'}
+                {connectionStatus.isConnected ? 'ðŸŸ¢ Healthy' : 'ðŸ”´ Not Connected'}
               </div>
             </div>
             <div className={styles.metric}>
@@ -554,14 +555,14 @@ export default function IBConnectionSettingsPage() {
 
       {/* Connection History */}
       <div className={`${styles.historySection} glass-light`}>
-        <h2 className={styles.sectionTitle}>📝 Connection History</h2>
+        <h2 className={styles.sectionTitle}>ðŸ“ Connection History</h2>
 
         {connectionHistory.length > 0 ? (
           <div className={styles.historyList}>
             {connectionHistory.map(entry => (
               <div key={entry.id} className={`${styles.historyEntry} ${styles[entry.type]}`}>
                 <div className={styles.historyIcon}>
-                  {entry.type === 'success' ? '✓' : entry.type === 'error' ? '✗' : entry.type === 'warning' ? '⚠' : 'ℹ'}
+                  {entry.type === 'success' ? 'âœ“' : entry.type === 'error' ? 'âœ—' : entry.type === 'warning' ? 'âš ' : 'â„¹'}
                 </div>
                 <div className={styles.historyContent}>
                   <p className={styles.historyMessage}>{entry.message}</p>
@@ -592,7 +593,7 @@ export default function IBConnectionSettingsPage() {
                   resetForm()
                 }}
               >
-                ✕
+                âœ•
               </button>
             </div>
 

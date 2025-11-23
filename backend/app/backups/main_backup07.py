@@ -41,4 +41,6 @@ app.include_router(strategies_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(alerts_router, prefix="/api/v1")
 
-print("✓ All routers registered successfully!")
+import logging
+logger = logging.getLogger(__name__)
+logger.info("✓ All routers registered successfully!")

@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+import logging
 from sqlalchemy.orm import Session
 from datetime import datetime
 from ..database import get_db
+logger = logging.getLogger(__name__)
 from ..models import Signal, Trade, User
 from ..schemas import SignalCreate, SignalResponse
 from ..services.risk_manager import RiskManager
@@ -20,7 +22,7 @@ async def receive_tradingview_alert(
     """
     try:
         # Log incoming signal
-        print(f"✅ [{datetime.now()}] Received signal: {signal.dict()}")
+        logger.info(f"✅ [{datetime.now()}] Received signal: {signal.dict()}")
         
         # Get or create demo user
         user = db.query(User).filter(User.id == 1).first()
@@ -53,7 +55,7 @@ async def receive_tradingview_alert(
         db.commit()
         db.refresh(db_signal)
         
-        print(f"✅ Signal saved! ID: {db_signal.id}")
+        logger.info(f"✅ Signal saved! ID: {db_signal.id}")
         
         # Validate with risk manager
         risk_check = RiskManager.validate_trade(
@@ -65,7 +67,7 @@ async def receive_tradingview_alert(
         )
         
         if not risk_check["approved"]:
-            print(f"❌ Risk check failed: {risk_check['errors']}")
+            logger.warning(f"❌ Risk check failed: {risk_check['errors']}")
             db_signal.status = "REJECTED"
             db_signal.rejection_reason = "; ".join(risk_check["errors"])
             db.commit()
@@ -78,10 +80,10 @@ async def receive_tradingview_alert(
             }
         
         if risk_check["warnings"]:
-            print(f"⚠️ Warnings: {risk_check['warnings']}")
+            logger.warning(f"⚠️ Warnings: {risk_check['warnings']}")
         
         # Execute trade on IBKR
-        print(f"🚀 Executing trade on IBKR...")
+        logger.info(f"🚀 Executing trade on IBKR...")
         executor = OrderExecutor(
             host=settings.ibkr_host,
             port=settings.ibkr_port,
@@ -92,7 +94,7 @@ async def receive_tradingview_alert(
         connected = await executor.connect()
         
         if not connected:
-            print("❌ Failed to connect to IBKR")
+            logger.error("❌ Failed to connect to IBKR")
             db_signal.status = "REJECTED"
             db_signal.rejection_reason = "Could not connect to IBKR"
             db.commit()
@@ -134,7 +136,7 @@ async def receive_tradingview_alert(
             
             db.commit()
             
-            print(f"✅ Trade executed! Order ID: {order_result.get('order_id')}")
+            logger.info(f"✅ Trade executed! Order ID: {order_result.get('order_id')}")
             
             return {
                 "status": "executed",
@@ -144,7 +146,7 @@ async def receive_tradingview_alert(
                 "timestamp": datetime.now().isoformat()
             }
         else:
-            print(f"❌ Order execution failed: {order_result.get('message')}")
+            logger.error(f"❌ Order execution failed: {order_result.get('message')}")
             db_signal.status = "REJECTED"
             db_signal.rejection_reason = order_result.get("message", "Unknown error")
             db.commit()
@@ -157,7 +159,7 @@ async def receive_tradingview_alert(
             }
         
     except Exception as e:
-        print(f"❌ Error processing webhook: {str(e)}")
+        logger.exception(f"❌ Error processing webhook: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 

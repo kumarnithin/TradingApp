@@ -1,14 +1,4 @@
-"""
-✅ FINAL models.py - FIXED FOR YOUR STRUCTURE
-Location: /backend/app/models.py
-
-✅ Added: is_ib_connected field to Account model
-✅ Added: last_synced_at field for IB sync tracking
-✅ All relationships preserved
-✅ Trades model ready for manual creation
-"""
-
-from sqlalchemy import Column, String, Integer, Float, DateTime, Text, Boolean, ForeignKey, JSON
+from sqlalchemy import Column, String, Integer, Float, DateTime, Text, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -16,59 +6,41 @@ import uuid
 
 Base = declarative_base()
 
-# ==================== USER MODEL ====================
-
 class User(Base):
     __tablename__ = "users"
-    
     id = Column(Integer, primary_key=True)
     username = Column(String(255), unique=True)
     email = Column(String(255), unique=True)
 
-# ==================== ACCOUNT MODEL ====================
-
 class Account(Base):
     __tablename__ = "accounts"
-    
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     account_name = Column(String, nullable=False, unique=True)
     account_type = Column(String)  # DEMO, LIVE, PAPER
     ib_account_number = Column(String(20))
     broker_name = Column(String)
-    status = Column(String, default="disconnected")  # connected, disconnected, error
-    
-    # ✅ NEW: Track IB connection
-    is_ib_connected = Column(Boolean, default=False)
-    
+    status = Column(String)  # connected, disconnected
     is_default = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
-    
     account_balance = Column(Float)
     available_balance = Column(Float)
     buying_power = Column(Float)
-    currency = Column(String, default="USD")
-    
+    currency = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     connected_at = Column(DateTime)
-    last_synced_at = Column(DateTime)  # ✅ Track when last synced from IB
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_synced_at = Column(DateTime)
     
     # Relationships
     signals = relationship("Signal", back_populates="account")
     trades = relationship("Trade", back_populates="account")
     alerts = relationship("Alert", back_populates="account")
 
-
-# ==================== SIGNAL MODEL ====================
-
 class Signal(Base):
     __tablename__ = "signals"
-    
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=True)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=True)  # ✅ NOW LINKED TO ACCOUNT
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     strategy_id = Column(String(255))
-    
     symbol = Column(String(20), nullable=False)
     action = Column(String(10), nullable=False)  # BUY, SELL
     quantity = Column(Float, nullable=False)
@@ -76,238 +48,133 @@ class Signal(Base):
     price = Column(Float)
     stop_loss = Column(Float)
     take_profit = Column(Float)
-    
-    status = Column(String(20), default="pending")  # pending, validated, executed, rejected, filled
+    status = Column(String(20), default="pending")  # pending, validated, executed, rejected
     rejection_reason = Column(Text)
-    confidence_score = Column(Float, default=50)  # 0-100
-    
+    confidence_score = Column(Float, default=50)  # 0-100 (for ML validation later)
     received_at = Column(DateTime, default=datetime.utcnow)
     processed_at = Column(DateTime)
-    filled_at = Column(DateTime)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     account = relationship("Account", back_populates="signals")
     trades = relationship("Trade", back_populates="signal")
 
-
-# ==================== TRADE MODEL ====================
-
 class Trade(Base):
     __tablename__ = "trades"
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=True)  # ✅ NOW LINKED TO ACCOUNT
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    signal_id = Column(Integer, ForeignKey("signals.id"), nullable=True)
-    
+    signal_id = Column(Integer, ForeignKey("signals.id"))
     symbol = Column(String(20), nullable=False)
     action = Column(String(10), nullable=False)  # BUY, SELL
     quantity = Column(Float, nullable=False)
-    trade_type = Column(String(20), default="Market")  # Market, Limit, Stop
-    
-    entry_price = Column(Float, nullable=False)
-    exit_price = Column(Float, nullable=True)
-    
+    order_type = Column(String(20))
+    entry_price = Column(Float)
+    exit_price = Column(Float)
     profit_loss = Column(Float, default=0)
     profit_loss_percent = Column(Float, default=0)
-    win_percentage = Column(Float, nullable=True)
-    commission = Column(Float, default=0.0)
-    
-    ibkr_order_id = Column(String(50), nullable=True)
-    status = Column(String(20), default="OPEN")  # OPEN, CLOSED, PENDING, DELETED
-    
-    notes = Column(Text, nullable=True)
-    
+    ibkr_order_id = Column(String(50))
+    status = Column(String(20), default="open")  # open, closed, cancelled
     created_at = Column(DateTime, default=datetime.utcnow)
-    entry_at = Column(DateTime, default=datetime.utcnow)
-    filled_at = Column(DateTime, nullable=True)
-    exit_at = Column(DateTime, nullable=True)
-    closed_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    is_active = Column(Boolean, default=True)
+    filled_at = Column(DateTime)
+    closed_at = Column(DateTime)
     
     # Relationships
     account = relationship("Account", back_populates="trades")
     signal = relationship("Signal", back_populates="trades")
 
-
-# ==================== ALERT MODEL ====================
-
 class Alert(Base):
     __tablename__ = "alerts"
-    
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=True)
-    
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=True)  # ✅ NOW LINKED TO ACCOUNT
     alert_id = Column(String)
     symbol = Column(String, nullable=False)
     action = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
-    
     order_type = Column(String)
     limit_price = Column(Float)
     contract_type = Column(String)
     stop_loss = Column(Float)
     take_profit = Column(Float)
-    
     strategy = Column(String)
     strategy_id = Column(String)
     timeframe = Column(String)
     signal_strength = Column(Float)
-    
     status = Column(String)  # pending, sent, executed, failed
     error_message = Column(Text)
     retry_count = Column(Integer, default=0)
-    
     order_id = Column(Integer)
     execution_price = Column(Float)
     filled_quantity = Column(Integer)
     average_fill_price = Column(Float)
-    
     raw_payload = Column(Text)
     comment = Column(Text)
-    
-    profit_loss = Column(Float)
-    profit_loss_percent = Column(Float)
-    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     submitted_at = Column(DateTime)
     filled_at = Column(DateTime)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    profit_loss = Column(Float)
+    profit_loss_percent = Column(Float)
     
     # Relationships
     account = relationship("Account", back_populates="alerts")
 
+from sqlalchemy import JSON  # Add if missing
 
 # ==================== TRADING DISCIPLINE MODELS ====================
 
 class TradingTemplate(Base):
     __tablename__ = "trading_templates"
-    
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, nullable=False, index=True)
-    
     strategy_name = Column(String, nullable=False)
     strategy_type = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    
     questions = Column(JSON, nullable=False)
-    
     is_favorite = Column(Boolean, default=False)
     usage_count = Column(Integer, default=0)
-    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
     validations = relationship("TradeValidation", back_populates="template", cascade="all, delete-orphan")
     
     def to_dict(self):
         return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "strategy_name": self.strategy_name,
-            "strategy_type": self.strategy_type,
-            "description": self.description,
-            "questions": self.questions,
-            "is_favorite": self.is_favorite,
-            "usage_count": self.usage_count,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "id": self.id, "user_id": self.user_id, "strategy_name": self.strategy_name,
+            "strategy_type": self.strategy_type, "description": self.description,
+            "questions": self.questions, "is_favorite": self.is_favorite,
+            "usage_count": self.usage_count, "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "question_count": len(self.questions) if self.questions else 0
         }
 
-
 class TradeValidation(Base):
     __tablename__ = "trade_validations"
-    
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, nullable=False, index=True)
     template_id = Column(String(36), ForeignKey("trading_templates.id"), nullable=True)
-    
     strategy_name = Column(String, nullable=False)
     answers = Column(JSON, nullable=True)
-    
     questionnaire_score = Column(Float, nullable=False)
     decision = Column(String, nullable=False)
     discipline_score = Column(Float, nullable=False)
     emotional_state = Column(String, nullable=False)
-    
     symbol = Column(String, nullable=True)
     entry_price = Column(Float, nullable=True)
     stop_loss = Column(Float, nullable=True)
     take_profit = Column(Float, nullable=True)
     position_size = Column(Float, nullable=True)
-    
     result = Column(String, nullable=True)
-    
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
     template = relationship("TradingTemplate", back_populates="validations")
     
     def to_dict(self):
         return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "template_id": self.template_id,
-            "strategy_name": self.strategy_name,
-            "answers": self.answers,
-            "questionnaire_score": self.questionnaire_score,
-            "decision": self.decision,
-            "discipline_score": self.discipline_score,
-            "emotional_state": self.emotional_state,
-            "symbol": self.symbol,
-            "entry_price": self.entry_price,
-            "stop_loss": self.stop_loss,
-            "take_profit": self.take_profit,
-            "position_size": self.position_size,
-            "result": self.result,
+            "id": self.id, "user_id": self.user_id, "template_id": self.template_id,
+            "strategy_name": self.strategy_name, "answers": self.answers,
+            "questionnaire_score": self.questionnaire_score, "decision": self.decision,
+            "discipline_score": self.discipline_score, "emotional_state": self.emotional_state,
+            "symbol": self.symbol, "entry_price": self.entry_price, "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit, "position_size": self.position_size, "result": self.result,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
-
-
-# ==================== PORTFOLIO HOLDING MODEL ====================
-
-class PortfolioHolding(Base):
-    __tablename__ = "portfolio_holdings"
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    account_id = Column(String(36), ForeignKey("accounts.id"), index=True)
-    
-    symbol = Column(String, index=True)
-    quantity = Column(Float)
-    avg_cost = Column(Float)
-    current_price = Column(Float)
-    market_value = Column(Float)
-    
-    pnl = Column(Float)
-    pnl_percent = Column(Float)
-    
-    day_change = Column(Float)
-    day_change_percent = Column(Float)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, default=True)
-
-
-# ==================== WATCHLIST MODEL ====================
-
-class Watchlist(Base):
-    __tablename__ = "watchlists"
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    account_id = Column(String(36), ForeignKey("accounts.id"), index=True)
-    
-    symbol = Column(String, index=True)
-    entry_price = Column(Float, nullable=True)
-    target_price = Column(Float, nullable=True)
-    stop_price = Column(Float, nullable=True)
-    
-    notes = Column(Text, nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    is_active = Column(Boolean, default=True)

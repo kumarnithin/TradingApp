@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -73,7 +74,7 @@ export default function AlertsPage() {
         setAlerts(response.data)
       }
     } catch (error) {
-      console.error('Error loading alerts:', error)
+      logger.error('Error loading alerts:', error)
     }
   }
 
@@ -84,7 +85,7 @@ export default function AlertsPage() {
       )
       setStats(response.data)
     } catch (error) {
-      console.error('Error loading stats:', error)
+      logger.error('Error loading stats:', error)
     }
   }
 
@@ -95,7 +96,7 @@ export default function AlertsPage() {
       )
       setStrategyStats(response.data.strategies || [])
     } catch (error) {
-      console.error('Error loading strategy stats:', error)
+      logger.error('Error loading strategy stats:', error)
     }
   }
 
@@ -114,7 +115,7 @@ export default function AlertsPage() {
       link.download = `alerts_export_${new Date().toISOString()}.json`
       link.click()
     } catch (error) {
-      console.error('Error exporting alerts:', error)
+      logger.error('Error exporting alerts:', error)
     }
   }
 
@@ -142,7 +143,7 @@ export default function AlertsPage() {
       {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-          📊 Alert Database Dashboard
+          ðŸ“Š Alert Database Dashboard
         </h1>
         <p style={{ color: '#666' }}>Track all TradingView signals with persistent database storage</p>
       </div>
@@ -227,7 +228,7 @@ export default function AlertsPage() {
           marginBottom: '2rem'
         }}>
           <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 'bold' }}>
-            📈 Strategy Performance
+            ðŸ“ˆ Strategy Performance
           </h2>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -279,7 +280,7 @@ export default function AlertsPage() {
         padding: '1.5rem',
         marginBottom: '2rem'
       }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', fontWeight: 'bold' }}>🔍 Filters</h2>
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', fontWeight: 'bold' }}>ðŸ” Filters</h2>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
@@ -376,7 +377,7 @@ export default function AlertsPage() {
             cursor: 'pointer'
           }}
         >
-          📥 Export as JSON
+          ðŸ“¥ Export as JSON
         </button>
       </div>
 
@@ -388,7 +389,7 @@ export default function AlertsPage() {
         padding: '1.5rem'
       }}>
         <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', fontWeight: 'bold' }}>
-          📋 Alert History ({alerts.length})
+          ðŸ“‹ Alert History ({alerts.length})
         </h2>
         
         {alerts.length > 0 ? (

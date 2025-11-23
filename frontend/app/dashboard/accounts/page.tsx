@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -57,7 +58,7 @@ export default function AccountsPage() {
       }
       setError(null)
     } catch (e) {
-      console.error('Error:', e)
+      logger.error('Error fetching accounts:', e)
       setError('Failed to fetch accounts')
       setAccounts([])
     } finally {
@@ -72,10 +73,19 @@ export default function AccountsPage() {
       if (res.data.status === 'connected' && res.data.account) {
         setConnectedAccount(res.data.account)
       } else {
-        setConnectedAccount(null)
+        // Fallback: if /current doesn't report a connected embedded account,
+        // check the accounts list for any account flagged `is_ib_connected`.
+        try {
+          const listRes = await axios.get(`${API_URL}/api/v1/accounts/list`)
+          const ibConnected = (listRes.data.accounts || []).find((a: any) => a.is_ib_connected)
+          if (ibConnected) setConnectedAccount(ibConnected)
+          else setConnectedAccount(null)
+        } catch (le) {
+          setConnectedAccount(null)
+        }
       }
     } catch (e) {
-      console.error('Error:', e)
+      logger.error('Error fetching connected account:', e)
       setConnectedAccount(null)
     }
   }
@@ -200,13 +210,14 @@ export default function AccountsPage() {
     }
   }
 
-  // Get status badge
-  const getStatusBadge = (status: string, accountName?: string) => {
-    const isConnected = connectedAccount?.account_name === accountName
-    
-    if (isConnected) {
+  // Get status badge (prefers explicit `is_ib_connected` flag, then fallback to connectedAccount)
+  const getStatusBadge = (account: AccountData) => {
+    const isConnectedFlag = !!(account as any).is_ib_connected
+    const isConnectedNow = connectedAccount?.account_name === account.account_name
+
+    if (isConnectedNow || isConnectedFlag) {
       return { text: '🟢 Connected', color: '#10b981' }
-    } else if (status === 'connected') {
+    } else if (account.status === 'connected') {
       return { text: '🟡 Was Connected', color: '#f59e0b' }
     } else {
       return { text: '⚪ Not Connected', color: '#6b7280' }
@@ -295,8 +306,8 @@ export default function AccountsPage() {
           ) : (
             <div style={{ display: 'grid', gap: '16px' }}>
               {filteredAccounts.map((account) => {
-                const statusBadge = getStatusBadge(account.status || '', account.account_name)
-                const isConnected = connectedAccount?.account_name === account.account_name
+                const statusBadge = getStatusBadge(account)
+                const isConnected = connectedAccount?.account_name === account.account_name || !!(account as any).is_ib_connected
 
                 return (
                   <div key={account.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '16px', alignItems: 'center' }}>

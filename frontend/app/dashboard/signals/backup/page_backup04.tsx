@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -18,7 +19,7 @@ export default function SignalsPage() {
 
   // ===== LOAD FILTER STATE FROM LOCALSTORAGE =====
   useEffect(() => {
-    console.log('🔄 Loading filter state from localStorage...')
+    logger.debug('ðŸ”„ Loading filter state from localStorage...')
 
     const savedShowAll = localStorage.getItem('showAllAccounts')
     const savedAccountId = localStorage.getItem('currentAccountId')
@@ -26,19 +27,19 @@ export default function SignalsPage() {
     const savedIsMultiSelect = localStorage.getItem('isMultiSelectMode')
 
     if (savedIsMultiSelect === 'true' && savedSelectedAccounts) {
-      console.log('✅ Setting Multi-Select mode')
+      logger.debug('âœ… Setting Multi-Select mode')
       setIsMultiSelect(true)
       setSelectedAccounts(JSON.parse(savedSelectedAccounts))
       setShowAllAccounts(false)
       setCurrentAccountId(null)
     } else if (savedShowAll === 'true') {
-      console.log('✅ Setting All Accounts mode')
+      logger.debug('âœ… Setting All Accounts mode')
       setShowAllAccounts(true)
       setSelectedAccounts([])
       setIsMultiSelect(false)
       setCurrentAccountId(null)
     } else if (savedAccountId) {
-      console.log('✅ Setting Single Account mode:', savedAccountId)
+      logger.debug('âœ… Setting Single Account mode:', savedAccountId)
       setCurrentAccountId(savedAccountId)
       setShowAllAccounts(false)
       setSelectedAccounts([])
@@ -48,27 +49,27 @@ export default function SignalsPage() {
 
   // ===== LISTEN FOR ACCOUNT CHANGES FROM SWITCHER =====
   useEffect(() => {
-    console.log('📡 Registering accountChanged event listener')
+    logger.debug('ðŸ“¡ Registering accountChanged event listener')
 
     const handleAccountChange = (event: any) => {
-      console.log('📩 Received accountChanged event:', event.detail)
+      logger.debug('ðŸ“© Received accountChanged event:', event.detail)
 
       const { account, showAll, selectedAccounts: selected, isMultiSelect: multiSelect } = event.detail
 
       if (multiSelect && selected && selected.length > 0) {
-        console.log('✅ Multi-Select event received:', selected)
+        logger.debug('âœ… Multi-Select event received:', selected)
         setIsMultiSelect(true)
         setSelectedAccounts(selected)
         setShowAllAccounts(false)
         setCurrentAccountId(null)
       } else if (showAll) {
-        console.log('✅ All Accounts event received')
+        logger.debug('âœ… All Accounts event received')
         setShowAllAccounts(true)
         setSelectedAccounts([])
         setIsMultiSelect(false)
         setCurrentAccountId(null)
       } else if (account) {
-        console.log('✅ Single Account event received:', account.id)
+        logger.debug('âœ… Single Account event received:', account.id)
         setCurrentAccountId(account.id)
         setShowAllAccounts(false)
         setSelectedAccounts([])
@@ -79,15 +80,15 @@ export default function SignalsPage() {
     window.addEventListener('accountChanged', handleAccountChange)
 
     return () => {
-      console.log('🧹 Cleaning up event listener')
+      logger.debug('ðŸ§¹ Cleaning up event listener')
       window.removeEventListener('accountChanged', handleAccountChange)
     }
   }, [])
 
   // ===== LOAD SIGNALS WHENEVER FILTER CHANGES =====
   useEffect(() => {
-    console.log('🔄 Filter changed, loading signals...')
-    console.log('Current state:', {
+    logger.debug('ðŸ”„ Filter changed, loading signals...')
+    logger.debug('Current state:', {
       currentAccountId,
       selectedAccounts,
       showAllAccounts,
@@ -108,25 +109,25 @@ export default function SignalsPage() {
         // MULTI-SELECT MODE: Send multiple account IDs
         const accountIds = selectedAccounts.join(',')
         url += `?account_ids=${accountIds}`
-        console.log(`📋 Multi-select mode - Loading signals for accounts: ${accountIds}`)
+        logger.debug(`ðŸ“‹ Multi-select mode - Loading signals for accounts: ${accountIds}`)
       } else if (!showAllAccounts && currentAccountId) {
         // SINGLE ACCOUNT MODE: Send single account ID
         url += `?account_id=${currentAccountId}`
-        console.log(`📋 Single account mode - Loading signals for account: ${currentAccountId}`)
+        logger.debug(`ðŸ“‹ Single account mode - Loading signals for account: ${currentAccountId}`)
       } else if (showAllAccounts) {
         // ALL ACCOUNTS MODE: No filter
-        console.log('📋 All accounts mode - Loading signals for all accounts')
+        logger.debug('ðŸ“‹ All accounts mode - Loading signals for all accounts')
       }
 
-      console.log('🌐 Fetching from:', url)
+      logger.debug('ðŸŒ Fetching from:', url)
 
       const response = await axios.get(url)
-      console.log('✅ Response received:', response.data)
+      logger.debug('âœ… Response received:', response.data)
 
       setSignals(response.data.signals || [])
       setLoading(false)
-    } catch (error) {
-      console.error('❌ Error loading signals:', error)
+      } catch (error) {
+      logger.error('âŒ Error loading signals:', error)
       setLoading(false)
     }
   }
@@ -150,10 +151,10 @@ export default function SignalsPage() {
         }}
       >
         {isMultiSelect
-          ? `✅ ${selectedAccounts.length} Account${selectedAccounts.length !== 1 ? 's' : ''} Selected`
+          ? `âœ… ${selectedAccounts.length} Account${selectedAccounts.length !== 1 ? 's' : ''} Selected`
           : showAllAccounts
-            ? '📊 All Accounts'
-            : '🏢 Single Account'}
+            ? 'ðŸ“Š All Accounts'
+            : 'ðŸ¢ Single Account'}
       </div>
 
       {/* LOADING STATE */}

@@ -78,31 +78,31 @@ async def receive_tradingview_signal(
     2. account_name (IB name): ?account_name=DU2348080
     """
     
-    print("\n" + "=" * 60)
-    print("🚨 TRADINGVIEW ALERT RECEIVED!")
-    print("=" * 60)
+    logger.debug("\n" + "=" * 60)
+    logger.info("🚨 TRADINGVIEW ALERT RECEIVED!")
+    logger.debug("=" * 60)
     
     TRADINGVIEW_PASSPHRASE = "Nits@signal"
     
     try:
         body = await request.json()
-        print(f"📨 Body: {body}")
+        logger.debug(f"📨 Body: {body}")
         
         passphrase = body.get("passphrase", "")
-        print(f"🔐 Passphrase: {passphrase}")
+        logger.debug("🔐 Passphrase received" if passphrase else "🔐 No passphrase provided")
         
         if passphrase != TRADINGVIEW_PASSPHRASE:
-            print(f"❌ MISMATCH!")
+            logger.warning(f"❌ MISMATCH!")
             raise HTTPException(status_code=401, detail="Invalid passphrase")
         
-        print("✅ Passphrase OK!")
+        logger.info("✅ Passphrase OK!")
         
         ticker = body.get("ticker", "UNKNOWN")
         action = body.get("action", "").upper()
         quantity = int(float(body.get("quantity", 1)))
         price = float(body.get("price", 0))
         
-        print(f"📊 Signal: {action} {quantity} {ticker} @ {price}")
+        logger.info(f"📊 Signal: {action} {quantity} {ticker} @ {price}")
         
         # ✅ Support both account_id and account_name
         final_account_id = account_id
@@ -110,26 +110,25 @@ async def receive_tradingview_signal(
         
         # If account_name provided, look it up
         if account_name and not account_id:
-            print(f"🔍 Looking up account by name: {account_name}")
+            logger.debug(f"🔍 Looking up account by name: {account_name}")
             account = db.query(Account).filter(Account.account_name == account_name).first()
             if account:
                 final_account_id = account.id
-                print(f"✅ Found account: {account_name} = {final_account_id}")
+                logger.info(f"✅ Found account: {account_name} = {final_account_id}")
             else:
-                print(f"❌ Account not found: {account_name}")
+                logger.error(f"❌ Account not found: {account_name}")
                 raise HTTPException(status_code=400, detail=f"Account not found: {account_name}")
         
         if not final_account_id:
-            print("❌ account_id or account_name required!")
+            logger.error("❌ account_id or account_name required!")
             raise HTTPException(status_code=400, detail="account_id or account_name required")
         
         # Verify account exists
         account = db.query(Account).filter(Account.id == final_account_id).first()
         if not account:
-            print(f"❌ Account not found: {final_account_id}")
+            logger.error(f"❌ Account not found: {final_account_id}")
             raise HTTPException(status_code=400, detail="Account not found")
-        
-        print(f"✅ Account found: {final_account_id}")
+        logger.info(f"✅ Account found: {final_account_id}")
         
         # ✅ USE RAW SQL INSERT with ALL required fields
         now = datetime.utcnow()
@@ -158,15 +157,15 @@ async def receive_tradingview_signal(
         signal_id = result.scalar()
         db.commit()
         
-        print(f"💾 Signal saved: {signal_id}")
+        logger.info(f"💾 Signal saved: {signal_id}")
         
         # ✅ AUTO-EXECUTE ON IB
-        print(f"🚀 Auto-executing on IB...")
+        logger.info(f"🚀 Auto-executing on IB...")
         try:
             from app.services.ib_client import ib_client
             
             if ib_client and ib_client.is_connected():
-                print(f"📤 Connected to IB, placing order...")
+                logger.info(f"📤 Connected to IB, placing order...")
                 
                 result = await ib_client.place_order(
                     symbol=ticker.upper(),
@@ -178,7 +177,7 @@ async def receive_tradingview_signal(
                 
                 if result.get("success"):
                     order_id = result.get("order_id")
-                    print(f"✅ Order placed on IB! Order ID: {order_id}")
+                    logger.info(f"✅ Order placed on IB! Order ID: {order_id}")
                     
                     # Update signal to FILLED
                     db.execute(text("""
@@ -188,18 +187,18 @@ async def receive_tradingview_signal(
                     """), {"signal_id": signal_id})
                     db.commit()
                     
-                    print(f"✅ Signal marked as FILLED")
+                    logger.info(f"✅ Signal marked as FILLED")
                 else:
                     error = result.get("error", "Unknown error")
-                    print(f"⚠️ IB order failed: {error}")
+                    logger.warning(f"⚠️ IB order failed: {error}")
             else:
-                print("⚠️ IB client not connected, signal stays PENDING")
+                logger.warning("⚠️ IB client not connected, signal stays PENDING")
         
         except Exception as e:
-            print(f"⚠️ Auto-execution failed: {str(e)}")
+            logger.exception(f"⚠️ Auto-execution failed: {str(e)}")
         
-        print(f"✅ SUCCESS!")
-        print("=" * 60 + "\n")
+        logger.info(f"✅ SUCCESS!")
+        logger.debug("=" * 60 + "\n")
         
         return {
             "status": "success",
@@ -216,8 +215,7 @@ async def receive_tradingview_signal(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ ERROR: {str(e)}")
-        print("=" * 60 + "\n")
+        logger.exception(f"❌ ERROR: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 # ==================== CRUD ENDPOINTS ====================

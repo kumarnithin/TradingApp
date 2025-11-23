@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import axios from 'axios'
+import logger from '../../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -27,9 +28,9 @@ export default function AccountsPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   
-  // ✅ FIX: Get filter from URL
+  // âœ… FIX: Get filter from URL
   const selectedAccountId = searchParams.get('account_id')
-  console.log('🔍 Filter Debug:', { selectedAccountId, urlParams: searchParams.toString() })
+  logger.debug('ðŸ” Filter Debug:', { selectedAccountId, urlParams: searchParams.toString() })
   
   const [accounts, setAccounts] = useState<AccountData[]>([])
   const [connectedAccount, setConnectedAccount] = useState<AccountData | null>(null)
@@ -56,11 +57,11 @@ export default function AccountsPage() {
       const res = await axios.get(`${API_URL}/api/v1/accounts/list`)
       if (res.data.accounts) {
         setAccounts(res.data.accounts)
-        console.log('✅ Accounts fetched:', res.data.accounts.length)
+        logger.info('âœ… Accounts fetched: %s', res.data.accounts.length)
       }
       setError(null)
     } catch (e) {
-      console.error('❌ Error fetching accounts:', e)
+      logger.error('âŒ Error fetching accounts:', e)
       setError('Failed to fetch accounts')
       setAccounts([])
     } finally {
@@ -78,7 +79,7 @@ export default function AccountsPage() {
         setConnectedAccount(null)
       }
     } catch (e) {
-      console.error('Error fetching connected account:', e)
+      logger.error('Error fetching connected account:', e)
       setConnectedAccount(null)
     }
   }
@@ -91,16 +92,16 @@ export default function AccountsPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // ✅ FIX: Compute filtered accounts - THIS IS THE CRITICAL PART
+  // âœ… FIX: Compute filtered accounts - THIS IS THE CRITICAL PART
   const filteredAccounts = selectedAccountId
     ? accounts.filter(acc => {
         const matches = acc.id === selectedAccountId
-        console.log(`Checking account ${acc.id}: ${matches ? '✅ MATCH' : '❌ NO MATCH'} (looking for ${selectedAccountId})`)
+        logger.debug(`Checking account ${acc.id}: ${matches ? 'âœ… MATCH' : 'âŒ NO MATCH'} (looking for ${selectedAccountId})`)
         return matches
       })
     : accounts
 
-  console.log('📊 Display Debug:', {
+  logger.debug('ðŸ“Š Display Debug: %o', {
     selectedAccountId,
     totalAccounts: accounts.length,
     filteredCount: filteredAccounts.length,
@@ -219,17 +220,17 @@ export default function AccountsPage() {
     const isConnected = connectedAccount?.account_name === accountName
     
     if (isConnected) {
-      return { text: '🟢 Connected', color: '#10b981' }
+      return { text: 'ðŸŸ¢ Connected', color: '#10b981' }
     } else if (status === 'connected') {
-      return { text: '🟡 Was Connected', color: '#f59e0b' }
+      return { text: 'ðŸŸ¡ Was Connected', color: '#f59e0b' }
     } else {
-      return { text: '⚪ Not Connected', color: '#6b7280' }
+      return { text: 'âšª Not Connected', color: '#6b7280' }
     }
   }
 
   // Clear filter button
   const clearFilter = () => {
-    console.log('🔄 Clearing filter...')
+    logger.debug('ðŸ”„ Clearing filter...')
     router.push('/dashboard/accounts')
   }
 
@@ -245,7 +246,7 @@ export default function AccountsPage() {
       {selectedAccountId && (
         <div style={{ background: '#1e40af', border: '1px solid #3b82f6', borderRadius: '8px', padding: '12px 16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: '14px', fontWeight: 600, color: '#bfdbfe' }}>
-            🔍 Filtered View: Showing only selected account
+            ðŸ” Filtered View: Showing only selected account
           </div>
           <button 
             onClick={clearFilter}
@@ -260,7 +261,7 @@ export default function AccountsPage() {
       {connectedAccount && (
         <div style={{ background: '#10b981', border: '1px solid #059669', borderRadius: '8px', padding: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>✅ Currently Connected</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>âœ… Currently Connected</div>
             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginTop: '4px' }}>
               Account: <strong>{connectedAccount.account_name}</strong> ({connectedAccount.account_type?.toUpperCase()})
             </div>
@@ -279,17 +280,17 @@ export default function AccountsPage() {
       {/* Error */}
       {error && (
         <div style={{ background: '#7f1d1d', border: '1px solid #dc2626', borderRadius: '8px', padding: '16px', color: '#fca5a5', marginBottom: '24px' }}>
-          ⚠️ {error}
+          âš ï¸ {error}
         </div>
       )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid #334155', paddingBottom: '16px' }}>
         <button onClick={() => setActiveTab('view')} style={{ background: activeTab === 'view' ? '#3b82f6' : 'transparent', border: 'none', color: '#fff', padding: '8px 16px', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-          📋 View Accounts ({filteredAccounts.length} {selectedAccountId ? 'selected' : 'total'})
+          ðŸ“‹ View Accounts ({filteredAccounts.length} {selectedAccountId ? 'selected' : 'total'})
         </button>
         <button onClick={() => { setActiveTab('create'); setEditingId(null); setFormData({ account_name: '', account_type: 'demo', ib_account_number: '', broker_name: 'Interactive Brokers', account_balance: '', currency: 'USD' }); }} style={{ background: activeTab === 'create' ? '#3b82f6' : 'transparent', border: 'none', color: '#fff', padding: '8px 16px', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-          ➕ {editingId ? 'Edit' : 'Create'} Account
+          âž• {editingId ? 'Edit' : 'Create'} Account
         </button>
       </div>
 
@@ -322,7 +323,7 @@ export default function AccountsPage() {
                       <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px' }}>ACCOUNT NAME</div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: '#f1f5f9' }}>{account.account_name}</div>
                       <div style={{ fontSize: '12px', fontWeight: 600, color: account.account_type === 'demo' ? '#06b6d4' : '#ef4444', marginTop: '8px', textTransform: 'uppercase' }}>
-                        {account.account_type === 'demo' ? '📊 Demo' : '⚠️ Live'}
+                        {account.account_type === 'demo' ? 'ðŸ“Š Demo' : 'âš ï¸ Live'}
                       </div>
                     </div>
 
@@ -350,13 +351,13 @@ export default function AccountsPage() {
                         onClick={() => handleEditClick(account)}
                         style={{ background: '#3b82f6', border: 'none', color: '#fff', padding: '6px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
                       >
-                        ✏️ Edit
+                        âœï¸ Edit
                       </button>
                       <button 
                         onClick={() => handleDeleteAccount(account.id || '', account.account_name)}
                         style={{ background: '#ef4444', border: 'none', color: '#fff', padding: '6px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
                       >
-                        🗑️ Delete
+                        ðŸ—‘ï¸ Delete
                       </button>
                     </div>
                   </div>
@@ -371,7 +372,7 @@ export default function AccountsPage() {
       {activeTab === 'create' && (
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '24px', maxWidth: '600px' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px' }}>
-            {editingId ? '✏️ Edit Account' : '➕ Create New Account'}
+            {editingId ? 'âœï¸ Edit Account' : 'âž• Create New Account'}
           </h2>
 
           <form onSubmit={editingId ? handleUpdateAccount : handleCreateAccount}>
@@ -383,8 +384,8 @@ export default function AccountsPage() {
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Account Type *</label>
               <select value={formData.account_type} onChange={(e) => setFormData({ ...formData, account_type: e.target.value as any })} style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }}>
-                <option value="demo">📊 Demo (Paper Trading)</option>
-                <option value="live">⚠️ Live (Real Money)</option>
+                <option value="demo">ðŸ“Š Demo (Paper Trading)</option>
+                <option value="live">âš ï¸ Live (Real Money)</option>
               </select>
             </div>
 

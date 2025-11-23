@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -64,7 +65,7 @@ export default function Dashboard() {
       setSignals(signalsRes.data)
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching data:', error)
+      logger.error('Error fetching data:', error)
       setLoading(false)
     }
   }

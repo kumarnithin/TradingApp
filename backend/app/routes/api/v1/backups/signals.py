@@ -78,31 +78,35 @@ async def receive_tradingview_signal(
     2. account_name (IB name): ?account_name=DU2348080
     """
     
-    print("\n" + "=" * 60)
-    print("🚨 TRADINGVIEW ALERT RECEIVED!")
-    print("=" * 60)
-    
+    logger.info("%s", "=" * 60)
+    logger.info("🚨 TRADINGVIEW ALERT RECEIVED!")
+    logger.info("%s", "=" * 60)
+
     TRADINGVIEW_PASSPHRASE = "Nits@signal"
-    
+
     try:
         body = await request.json()
-        print(f"📨 Body: {body}")
-        
+        # Redact passphrase before logging body
+        safe_body = dict(body) if isinstance(body, dict) else body
+        if isinstance(safe_body, dict) and 'passphrase' in safe_body:
+            safe_body['passphrase'] = 'REDACTED'
+        logger.debug("📨 Body: %s", safe_body)
+
         passphrase = body.get("passphrase", "")
-        print(f"🔐 Passphrase: {passphrase}")
-        
+        logger.debug("🔐 Passphrase received (redacted)")
+
         if passphrase != TRADINGVIEW_PASSPHRASE:
-            print(f"❌ MISMATCH!")
+            logger.warning("❌ Passphrase mismatch for incoming webhook")
             raise HTTPException(status_code=401, detail="Invalid passphrase")
-        
-        print("✅ Passphrase OK!")
+
+        logger.info("✅ Passphrase OK!")
         
         ticker = body.get("ticker", "UNKNOWN")
         action = body.get("action", "").upper()
         quantity = int(float(body.get("quantity", 1)))
         price = float(body.get("price", 0))
         
-        print(f"📊 Signal: {action} {quantity} {ticker} @ {price}")
+        logger.info("📊 Signal: %s %s %s @ %s", action, quantity, ticker, price)
         
         # ✅ Support both account_id and account_name
         final_account_id = account_id
@@ -110,26 +114,26 @@ async def receive_tradingview_signal(
         
         # If account_name provided, look it up
         if account_name and not account_id:
-            print(f"🔍 Looking up account by name: {account_name}")
+            logger.debug("🔍 Looking up account by name: %s", account_name)
             account = db.query(Account).filter(Account.account_name == account_name).first()
             if account:
                 final_account_id = account.id
-                print(f"✅ Found account: {account_name} = {final_account_id}")
+                logger.info("✅ Found account: %s = %s", account_name, final_account_id)
             else:
-                print(f"❌ Account not found: {account_name}")
+                logger.warning("❌ Account not found: %s", account_name)
                 raise HTTPException(status_code=400, detail=f"Account not found: {account_name}")
         
         if not final_account_id:
-            print("❌ account_id or account_name required!")
+            logger.warning("❌ account_id or account_name required!")
             raise HTTPException(status_code=400, detail="account_id or account_name required")
         
         # Verify account exists
         account = db.query(Account).filter(Account.id == final_account_id).first()
         if not account:
-            print(f"❌ Account not found: {final_account_id}")
+            logger.warning("❌ Account not found: %s", final_account_id)
             raise HTTPException(status_code=400, detail="Account not found")
-        
-        print(f"✅ Account found: {final_account_id}")
+
+        logger.info("✅ Account found: %s", final_account_id)
         
         # ✅ USE RAW SQL INSERT with ALL required fields
         now = datetime.utcnow()
@@ -157,16 +161,16 @@ async def receive_tradingview_signal(
         
         signal_id = result.scalar()
         db.commit()
-        
-        print(f"💾 Signal saved: {signal_id}")
+
+        logger.info("💾 Signal saved: %s", signal_id)
         
         # ✅ NEW: AUTO-EXECUTE ON IB
-        print(f"🚀 Auto-executing on IB...")
+        logger.info("🚀 Auto-executing on IB...")
         try:
             from app.services.ib_client import ib_client
             
             if ib_client and ib_client.is_connected():
-                print(f"📤 Connected to IB, placing order...")
+                logger.info("📤 Connected to IB, placing order...")
                 
                 result = await ib_client.place_order(
                     symbol=ticker.upper(),
@@ -178,7 +182,7 @@ async def receive_tradingview_signal(
                 
                 if result.get("success"):
                     order_id = result.get("order_id")
-                    print(f"✅ Order placed on IB! Order ID: {order_id}")
+                    logger.info("✅ Order placed on IB! Order ID: %s", order_id)
                     
                     # Update signal to FILLED
                     db.execute(text("""
@@ -188,20 +192,20 @@ async def receive_tradingview_signal(
                     """), {"signal_id": signal_id})
                     db.commit()
                     
-                    print(f"✅ Signal marked as FILLED")
+                    logger.info("✅ Signal marked as FILLED")
                 else:
                     error = result.get("error", "Unknown error")
-                    print(f"⚠️ IB order failed: {error}")
+                    logger.warning("⚠️ IB order failed: %s", error)
                     # Signal stays PENDING
             else:
-                print("⚠️ IB client not connected, signal stays PENDING")
+                logger.warning("⚠️ IB client not connected, signal stays PENDING")
         
         except Exception as e:
-            print(f"⚠️ Auto-execution failed: {str(e)}")
+            logger.exception("⚠️ Auto-execution failed: %s", str(e))
             # Signal stays PENDING, can retry manually
         
-        print(f"✅ SUCCESS!")
-        print("=" * 60 + "\n")
+        logger.info("✅ SUCCESS!")
+        logger.info("%s\n", "=" * 60)
         
         return {
             "status": "success",
@@ -218,8 +222,8 @@ async def receive_tradingview_signal(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ ERROR: {str(e)}")
-        print("=" * 60 + "\n")
+        logger.exception("❌ ERROR: %s", str(e))
+        logger.info("%s\n", "=" * 60)
         raise HTTPException(status_code=400, detail=str(e))
 
 # ==================== CRUD ENDPOINTS ====================

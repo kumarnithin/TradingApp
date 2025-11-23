@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './signals.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -43,7 +44,7 @@ export default function SignalsPage() {
       setSignals(response.data)
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching signals:', error)
+      logger.error('Error fetching signals:', error)
       setLoading(false)
     }
   }
@@ -90,7 +91,7 @@ export default function SignalsPage() {
       {/* Statistics Cards */}
       <div className={styles.statsGrid}>
         <div className={`${styles.statCard} glass-light`}>
-          <div className={styles.statIcon}>📊</div>
+          <div className={styles.statIcon}>ðŸ“Š</div>
           <div className={styles.statContent}>
             <p className={styles.statLabel}>Total Signals</p>
             <p className={styles.statValue}>{stats.total}</p>
@@ -98,7 +99,7 @@ export default function SignalsPage() {
         </div>
 
         <div className={`${styles.statCard} glass-light`}>
-          <div className={`${styles.statIcon} ${styles.iconGreen}`}>✓</div>
+          <div className={`${styles.statIcon} ${styles.iconGreen}`}>âœ“</div>
           <div className={styles.statContent}>
             <p className={styles.statLabel}>Executed</p>
             <p className={styles.statValue}>{stats.executed}</p>
@@ -106,7 +107,7 @@ export default function SignalsPage() {
         </div>
 
         <div className={`${styles.statCard} glass-light`}>
-          <div className={`${styles.statIcon} ${styles.iconYellow}`}>⏳</div>
+          <div className={`${styles.statIcon} ${styles.iconYellow}`}>â³</div>
           <div className={styles.statContent}>
             <p className={styles.statLabel}>Pending</p>
             <p className={styles.statValue}>{stats.pending}</p>
@@ -114,7 +115,7 @@ export default function SignalsPage() {
         </div>
 
         <div className={`${styles.statCard} glass-light`}>
-          <div className={`${styles.statIcon} ${styles.iconRed}`}>✗</div>
+          <div className={`${styles.statIcon} ${styles.iconRed}`}>âœ—</div>
           <div className={styles.statContent}>
             <p className={styles.statLabel}>Rejected</p>
             <p className={styles.statValue}>{stats.rejected}</p>

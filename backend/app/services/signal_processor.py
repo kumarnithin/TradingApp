@@ -26,10 +26,8 @@ def get_db():
 # ✅ YOUR PASSPHRASE
 TRADINGVIEW_PASSPHRASE = "Nits@signal"
 
-print("=" * 60)
-print("🌐 TRADINGVIEW WEBHOOK ADAPTER LOADED")
-print(f"✅ Passphrase set to: {TRADINGVIEW_PASSPHRASE}")
-print("=" * 60)
+logger.info("🌐 TRADINGVIEW WEBHOOK ADAPTER LOADED")
+logger.debug(f"✅ Passphrase set to: {TRADINGVIEW_PASSPHRASE}")
 
 @router.post("/tradingview")
 async def receive_tradingview_alert(
@@ -55,33 +53,32 @@ async def receive_tradingview_alert(
     }
     """
     
-    print("\n" + "=" * 60)
-    print("🚨 TRADINGVIEW ALERT RECEIVED!")
-    print("=" * 60)
+    logger.debug("\n" + "=" * 60)
+    logger.info("🚨 TRADINGVIEW ALERT RECEIVED!")
     
     try:
         # Parse request
-        try:
+            try:
             body = await request.json()
-            print(f"📨 Body: {body}")
+            logger.debug(f"📨 Body: {body}")
         except:
             try:
                 form_data = await request.form()
                 body = dict(form_data)
-                print(f"📨 Form: {body}")
+                logger.debug(f"📨 Form: {body}")
             except:
-                print("❌ Could not parse body")
+                logger.error("❌ Could not parse body")
                 raise HTTPException(status_code=400, detail="Invalid request format")
         
         # Check passphrase
         passphrase = body.get("passphrase", "")
-        print(f"🔐 Passphrase: {passphrase}")
+        logger.debug("🔐 Passphrase received" if passphrase else "🔐 No passphrase provided")
         
         if passphrase != TRADINGVIEW_PASSPHRASE:
-            print(f"❌ MISMATCH! Expected: {TRADINGVIEW_PASSPHRASE}")
+            logger.warning(f"❌ MISMATCH! Expected: {TRADINGVIEW_PASSPHRASE}")
             raise HTTPException(status_code=401, detail="Invalid passphrase")
         
-        print("✅ Passphrase OK!")
+        logger.info("✅ Passphrase OK!")
         
         # Extract TradingView fields
         ticker = body.get("ticker", "UNKNOWN")
@@ -89,10 +86,10 @@ async def receive_tradingview_alert(
         quantity = float(body.get("quantity", 1))
         price = float(body.get("price", 0))
         
-        print(f"📊 Signal: {action} {quantity} {ticker} @ {price}")
+        logger.info(f"📊 Signal: {action} {quantity} {ticker} @ {price}")
         
         if not account_id:
-            print("❌ account_id required!")
+            logger.error("❌ account_id required!")
             raise HTTPException(status_code=400, detail="account_id required in query params")
         
         # Convert to signals.py format
@@ -109,7 +106,7 @@ async def receive_tradingview_alert(
             "take_profit": None
         }
         
-        print(f"🔄 Converting to internal format: {signal_data}")
+        logger.debug(f"🔄 Converting to internal format: {signal_data}")
         
         # Call your existing signals.py webhook endpoint
         from app.routes.api.v1.signals import receive_tradingview_signal as signals_webhook
@@ -131,23 +128,21 @@ async def receive_tradingview_alert(
         
         signal_obj = SignalCreate(**signal_data)
         
-        print(f"📤 Calling signals webhook...")
+        logger.info(f"📤 Calling signals webhook...")
         
         # Call existing endpoint
         result = await signals_webhook(signal_obj, db)
         
-        print(f"✅ SUCCESS! Result: {result}")
-        print("=" * 60 + "\n")
+        logger.info(f"✅ SUCCESS! Result: {result}")
         
         return result
     
-    except HTTPException as e:
-        print(f"❌ ERROR: {e.detail}")
-        print("=" * 60 + "\n")
+        except HTTPException as e:
+        logger.error(f"❌ ERROR: {e.detail}")
+        logger.debug("=" * 60 + "\n")
         raise
     except Exception as e:
-        print(f"❌ ERROR: {str(e)}")
-        print("=" * 60 + "\n")
+        logger.exception(f"❌ ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Health check

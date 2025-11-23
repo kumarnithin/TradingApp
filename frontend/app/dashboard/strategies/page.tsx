@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './strategies.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -93,7 +94,7 @@ export default function StrategiesPage() {
       setStrategies(response.data)
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching strategies:', error)
+      logger.error('Error fetching strategies:', error)
       setLoading(false)
     }
   }
@@ -122,7 +123,7 @@ export default function StrategiesPage() {
       fetchStrategies()
       alert('Strategy created successfully!')
     } catch (error) {
-      console.error('Error creating strategy:', error)
+      logger.error('Error creating strategy:', error)
       alert('Failed to create strategy')
     }
   }
@@ -133,7 +134,7 @@ export default function StrategiesPage() {
       await axios.patch(`${API_URL}/api/v1/strategies/${strategyId}`, { status: newStatus })
       fetchStrategies()
     } catch (error) {
-      console.error('Error updating strategy:', error)
+      logger.error('Error updating strategy:', error)
     }
   }
 
@@ -144,7 +145,7 @@ export default function StrategiesPage() {
       fetchStrategies()
       alert('Strategy stopped')
     } catch (error) {
-      console.error('Error stopping strategy:', error)
+      logger.error('Error stopping strategy:', error)
     }
   }
 
@@ -155,7 +156,7 @@ export default function StrategiesPage() {
       fetchStrategies()
       alert('Strategy deleted')
     } catch (error) {
-      console.error('Error deleting strategy:', error)
+      logger.error('Error deleting strategy:', error)
     }
   }
 

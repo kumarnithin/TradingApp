@@ -137,43 +137,43 @@ class IBClientService:
                          order_type: str = "MKT", limit_price: Optional[float] = None) -> dict:
         """Place an order on IB"""
         try:
-            print(f"\n📤 PLACE ORDER: {action} {quantity} {symbol}")
+            logger.info(f"📤 PLACE ORDER: {action} {quantity} {symbol}")
 
             if not self.is_connected():
-                print("❌ Not connected to IB")
+                logger.error("❌ Not connected to IB")
                 return {"success": False, "error": "Not connected to IB"}
 
             contract = None
             if symbol.upper() == "EURUSD":
                 contract = Forex(pair="EURUSD")
-                print(f"💱 Forex: {symbol}")
+                logger.debug(f"💱 Forex: {symbol}")
             elif symbol.upper() in ["ES", "NQ", "YM", "GC", "CL"]:
                 contract = Future(symbol=symbol.upper(), exchange="CME")
-                print(f"📊 Futures: {symbol}")
+                logger.debug(f"📊 Futures: {symbol}")
             else:
                 contract = Stock(symbol=symbol.upper(), exchange="SMART", currency="USD")
-                print(f"📈 Stock: {symbol}")
+                logger.debug(f"📈 Stock: {symbol}")
 
             qualified_contracts = await self.ib.qualifyContractsAsync(contract)
             if not qualified_contracts:
-                print(f"❌ Could not qualify contract: {symbol}")
+                logger.error(f"❌ Could not qualify contract: {symbol}")
                 return {"success": False, "error": f"Invalid contract: {symbol}"}
 
             contract = qualified_contracts[0]
-            print(f"✅ Contract qualified")
+            logger.info(f"✅ Contract qualified")
 
             if order_type.upper() == "MKT":
                 order = MarketOrder(action, quantity)
-                print(f"📊 Order type: MARKET")
+                logger.debug(f"📊 Order type: MARKET")
             elif order_type.upper() == "LMT":
                 if not limit_price:
                     return {"success": False, "error": "limit_price required for LMT orders"}
                 order = LimitOrder(action, quantity, limit_price)
-                print(f"📊 Order type: LIMIT @ {limit_price}")
+                logger.debug(f"📊 Order type: LIMIT @ {limit_price}")
             else:
                 return {"success": False, "error": f"Unknown order type: {order_type}"}
 
-            print(f"🚀 Placing order...")
+            logger.info(f"🚀 Placing order...")
             trade = self.ib.placeOrder(contract, order)
 
             await asyncio.sleep(0.5)
@@ -181,8 +181,7 @@ class IBClientService:
             order_id = trade.order.orderId
             order_status = trade.orderStatus.status if trade.orderStatus else "PENDING"
 
-            print(f"✅ Order placed! ID: {order_id}, Status: {order_status}")
-            print("=" * 60 + "\n")
+            logger.info(f"✅ Order placed! ID: {order_id}, Status: {order_status}")
 
             return {
                 "success": True,
@@ -196,8 +195,7 @@ class IBClientService:
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
-            print(f"❌ Order error: {str(e)}")
-            print("=" * 60 + "\n")
+            logger.error(f"❌ Order error: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),

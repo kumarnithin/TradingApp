@@ -1,9 +1,10 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState, useRef } from 'react'
 import axios from 'axios'
 import { createChart, ColorType } from 'lightweight-charts'
 import styles from './portfolio.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -159,14 +160,14 @@ export default function PortfolioPage() {
           setSummary(mockSummary)
         }
       } catch (apiError) {
-        console.warn('Backend not available, using mock data:', apiError)
+        logger.warn('Backend not available, using mock data:', apiError)
         setPositions(mockPositions)
         setSummary(mockSummary)
       }
 
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching portfolio:', error)
+      logger.error('Error fetching portfolio:', error)
       setError('Failed to fetch portfolio data')
       setLoading(false)
     }
@@ -316,7 +317,7 @@ export default function PortfolioPage() {
         chart.remove()
       }
     } catch (err) {
-      console.error('Chart error:', err)
+      logger.error('Chart error:', err)
     }
   }
 
@@ -384,14 +385,14 @@ export default function PortfolioPage() {
           color: '#ef4444',
           fontSize: '13px'
         }}>
-          ⚠️ {error}
+          âš ï¸ {error}
         </div>
       )}
 
       {/* Header */}
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>💼 Portfolio Manager</h1>
+          <h1 className={styles.pageTitle}>ðŸ’¼ Portfolio Manager</h1>
           <p className={styles.pageSubtitle}>Track holdings, watchlists and live market data</p>
         </div>
         <div className={styles.headerButtons}>
@@ -436,7 +437,7 @@ export default function PortfolioPage() {
       <div className={styles.mainGrid}>
         {/* Holdings Table */}
         <div className={`${styles.holdingsSection} glass-light`}>
-          <h2 className={styles.sectionTitle}>📋 Holdings</h2>
+          <h2 className={styles.sectionTitle}>ðŸ“‹ Holdings</h2>
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
               <thead>
@@ -480,7 +481,7 @@ export default function PortfolioPage() {
                         </span>
                       </td>
                       <td>
-                        <button className={styles.btnAction}>📊</button>
+                        <button className={styles.btnAction}>ðŸ“Š</button>
                       </td>
                     </tr>
                   ))
@@ -499,7 +500,7 @@ export default function PortfolioPage() {
         {/* Live Chart */}
         <div className={`${styles.chartSection} glass-light`}>
           <div className={styles.chartHeader}>
-            <h2 className={styles.sectionTitle}>📈 Live Chart: {selectedSymbol}</h2>
+            <h2 className={styles.sectionTitle}>ðŸ“ˆ Live Chart: {selectedSymbol}</h2>
             <div className={styles.chartControls}>
               <select
                 value={selectedSymbol}
@@ -522,7 +523,7 @@ export default function PortfolioPage() {
       {/* Watchlist Section */}
       <div className={`${styles.watchlistSection} glass-light`}>
         <div className={styles.watchlistHeader}>
-          <h2 className={styles.sectionTitle}>👀 Watchlists</h2>
+          <h2 className={styles.sectionTitle}>ðŸ‘€ Watchlists</h2>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               className={styles.btnAdd}
@@ -597,7 +598,7 @@ export default function PortfolioPage() {
                     justifyContent: 'center'
                   }}
                 >
-                  ✏️
+                  âœï¸
                 </button>
                 {watchlists.length > 1 && (
                   <button
@@ -619,7 +620,7 @@ export default function PortfolioPage() {
                       justifyContent: 'center'
                     }}
                   >
-                    ✕
+                    âœ•
                   </button>
                 )}
               </div>
@@ -727,7 +728,7 @@ export default function PortfolioPage() {
                         className={styles.btnRemove}
                         onClick={() => handleRemoveSymbolFromWatchlist(item.symbol)}
                       >
-                        ✕
+                        âœ•
                       </button>
                     </div>
                     <div className={styles.watchlistPrice}>
@@ -742,7 +743,7 @@ export default function PortfolioPage() {
                         className={styles.btnChart}
                         onClick={() => setSelectedSymbol(item.symbol)}
                       >
-                        📊 Chart
+                        ðŸ“Š Chart
                       </button>
                     </div>
                   </div>
@@ -771,7 +772,7 @@ export default function PortfolioPage() {
                   setWatchlistName('')
                 }}
               >
-                ✕
+                âœ•
               </button>
             </div>
             <div className={styles.modalBody}>

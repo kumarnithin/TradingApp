@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './risk.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -66,7 +67,7 @@ export default function RiskPage() {
       setPositions(positionsRes.data)
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching risk data:', error)
+      logger.error('Error fetching risk data:', error)
       setLoading(false)
     }
   }

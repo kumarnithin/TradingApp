@@ -1,29 +1,30 @@
 """
-IB Connection Router - FINAL COMPLETE VERSION
+🔧 FINAL FIX - Correct async/non-async handling
+
 Location: /backend/app/routes/api/v1/ib.py
 
-✅ COMPLETE WITH:
-- Account service integration (embedded service)
-- Auto-create account in database on IB connect
-- Status persistence across page reloads
-- All existing logic preserved
+✅ ISSUE: is_connected() returns bool, NOT async
+❌ Wrong: await ib_client.is_connected()
+✅ Correct: ib_client.is_connected() or getattr(..., False)
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
 from typing import Optional
 import asyncio
-import uuid
+import uuid as uuid_lib
 
 logger = logging.getLogger(__name__)
-
-# ✅ NO PREFIX HERE - main.py adds the full prefix
 router = APIRouter(tags=["IB Connection"])
 
-# Import IB client service with error handling
-ib_client = None
+# Imports for database
+from app.config import get_db
+from app.database import Account
 
+# Import IB client service
+ib_client = None
 try:
     from app.services.ib_client import ib_client as _ib_client
     ib_client = _ib_client
@@ -45,7 +46,7 @@ async def get_available_accounts(data: dict):
             logger.error("IB Client Service is not available")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="IB Client Service not initialized. Check backend logs for errors."
+                detail="IB Client Service not initialized"
             )
 
         account_type = data.get('account_type', 'demo').lower()
@@ -81,7 +82,6 @@ async def get_available_accounts(data: dict):
                 }
 
             accounts_list = []
-
             for acc in managed_accounts:
                 try:
                     account_values = ib_client.ib.accountValues(account=acc)
@@ -100,7 +100,6 @@ async def get_available_accounts(data: dict):
                             account_info["buying_power"] = float(val.value)
 
                     accounts_list.append(account_info)
-
                 except Exception as e:
                     logger.warning(f"Error getting info for account {acc}: {e}")
                     accounts_list.append({
@@ -113,7 +112,6 @@ async def get_available_accounts(data: dict):
                 ib_client.ib.disconnect()
 
             logger.info(f"✅ Found {len(accounts_list)} {account_type.upper()} account(s)")
-
             return {
                 "status": "success",
                 "account_type": account_type,
@@ -126,7 +124,6 @@ async def get_available_accounts(data: dict):
             logger.error(f"Error scanning accounts: {str(e)}")
             if ib_client.ib.isConnected():
                 ib_client.ib.disconnect()
-
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to scan accounts: {str(e)}"
@@ -144,49 +141,47 @@ async def get_available_accounts(data: dict):
 # ============ CONNECTION ENDPOINTS ============
 
 @router.post("/connect")
-async def connect_to_ib(data: dict):
+async def connect_to_ib(data: dict, db: Session = Depends(get_db)):
     """Connect to IB TWS with account selection"""
     try:
         if not ib_client:
             logger.error("IB Client Service is not available")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="IB Client Service not initialized. Check backend logs for errors."
+                detail="IB Client Service not initialized"
             )
 
         account_name = data.get('account_name')
         if not account_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="account_name is required. Use /get-accounts first to see available accounts"
+                detail="account_name is required"
             )
 
         host = data.get('host', '127.0.0.1')
         port = data.get('port')
         client_id = data.get('client_id', 1)
 
-        # ✅ YOUR EXISTING DEMO/LIVE DETECTION LOGIC - UNCHANGED
+        # Detect account type
         if account_name.startswith("DU"):
             account_type = "demo"
             if port is None:
                 port = 7497
-            account_label = "DEMO (Paper Trading)"
-
+            account_label = "DEMO"
         elif account_name.startswith("U"):
             account_type = "live"
             if port is None:
                 port = 7496
-            account_label = "LIVE (Real Trading) ⚠️"
-
+            account_label = "LIVE"
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid account format: {account_name}. Demo accounts start with 'DU', Live accounts start with 'U'"
+                detail=f"Invalid account format: {account_name}"
             )
 
         logger.info(f"📤 Connecting to {account_name} ({account_label}) at {host}:{port}")
 
-        # ✅ YOUR EXISTING CONNECT LOGIC - UNCHANGED
+        # Connect to IB
         result = await ib_client.connect(
             account_type=account_type,
             account_name=account_name,
@@ -197,102 +192,43 @@ async def connect_to_ib(data: dict):
 
         if result["status"] == "success":
             logger.info(f"✅ Connected to {account_name}")
-            
-            # ============ NEW: STORE & CREATE ACCOUNT DATA ============
-            # This creates the account in database AND embedded service
-            
-            # STEP 1: Store in embedded service (for current connection state)
+
+            # UPDATE DATABASE - SET FLAG
             try:
-                from app.routes.api.v1.accounts import account_service
+                # Find account by name
+                account = db.query(Account).filter(Account.account_name == account_name).first()
                 
-                logger.info(f"📊 Storing account in service: {account_name}")
-                
-                account_service.set_connected_account({
-                    "account_name": account_name,
-                    "account_type": account_type,
-                    "host": host,
-                    "port": port,
-                    "status": "connected",
-                    "equity": 0.0,
-                    "cash": 0.0,
-                    "buying_power": 0.0,
-                })
-                
-                logger.info(f"✅ Account stored in service: {account_name}")
-                
+                if account:
+                    logger.info(f"📊 Found account in DB: {account_name}")
+                    account.is_ib_connected = True
+                    account.status = "connected"
+                    account.connected_at = datetime.utcnow()
+                    db.commit()
+                    db.refresh(account)
+                    logger.info(f"✅✅✅ Account marked as IB-connected: {account.account_name}")
+                else:
+                    logger.info(f"📝 Creating account in DB: {account_name}")
+                    new_account = Account(
+                        id=str(uuid_lib.uuid4()),
+                        account_name=account_name,
+                        account_type=account_type,
+                        ib_account_number=account_name,
+                        broker_name="Interactive Brokers",
+                        status="connected",
+                        is_ib_connected=True,
+                        is_active=True,
+                        created_at=datetime.utcnow(),
+                        connected_at=datetime.utcnow(),
+                    )
+                    db.add(new_account)
+                    db.commit()
+                    db.refresh(new_account)
+                    logger.info(f"✅✅✅ Created + marked as IB-connected: {new_account.account_name}")
+
             except Exception as e:
-                logger.warning(f"⚠️ Could not store in service: {str(e)}")
-            
-            # STEP 2: Create/Update in database (for persistent storage)
-            try:
-                from app.config import get_db
-                from sqlalchemy.orm import Session
-                
-                logger.info(f"💾 Creating/updating account in database: {account_name}")
-                
-                # Get database session
-                db_gen = get_db()
-                db = next(db_gen)
-                
-                try:
-                    from app.database import Account
-                    
-                    # Check if account already exists
-                    existing_account = db.query(Account).filter(
-                        Account.account_name == account_name
-                    ).first()
-                    
-                    if existing_account:
-                        # Update existing account
-                        logger.info(f"📊 Account exists, updating status: {account_name}")
-                        existing_account.status = "connected"
-                        existing_account.connected_at = datetime.utcnow()
-                        existing_account.is_active = True
-                        existing_account.account_type = account_type
-                        
-                        db.commit()
-                        db.refresh(existing_account)
-                        
-                        logger.info(f"✅ Account updated in DB: {account_name} (Status: Connected)")
-                        
-                        result["account_db_status"] = "updated"
-                        result["account_id"] = existing_account.id
-                        
-                    else:
-                        # Create new account
-                        logger.info(f"✨ Creating new account in database: {account_name}")
-                        
-                        new_account = Account(
-                            id=str(uuid.uuid4()),
-                            account_name=account_name,
-                            account_type=account_type,
-                            ib_account_number=account_name,
-                            broker_name="Interactive Brokers",
-                            currency="USD",
-                            is_active=True,
-                            status="connected",
-                            created_at=datetime.utcnow(),
-                            connected_at=datetime.utcnow(),
-                        )
-                        
-                        db.add(new_account)
-                        db.commit()
-                        db.refresh(new_account)
-                        
-                        logger.info(f"✅ Account created in DB: {account_name} (ID: {new_account.id})")
-                        
-                        result["account_db_status"] = "created"
-                        result["account_id"] = new_account.id
-                
-                finally:
-                    db.close()
-                
-            except Exception as e:
-                logger.warning(f"⚠️ Could not save to database: {str(e)}", exc_info=True)
-                # Connection still succeeds even if DB save fails
-            
-            # ============ END AUTO-CREATE ============
-            
+                logger.error(f"❌ Database error: {str(e)}")
+                db.rollback()
+
             return result
         else:
             raise HTTPException(
@@ -343,16 +279,44 @@ async def get_connection_status():
                 "error": "IB Client Service not available"
             }
 
-        #result = await ib_client.get_connection_status()
-        result = ib_client.get_connection_status()  # ✅ Remove 'await'
-
-        return result
+        # ✅ FIX: Check if method is callable and if it needs await
+        # Try to get is_connected - it might be a property or method
+        try:
+            # First check if it's a coroutine function
+            if hasattr(ib_client, 'is_connected'):
+                is_connected_method = getattr(ib_client, 'is_connected', None)
+                # If it's callable, try calling it
+                if callable(is_connected_method):
+                    result = is_connected_method()
+                    # If result is awaitable, await it
+                    if hasattr(result, '__await__'):
+                        is_connected = await result
+                    else:
+                        is_connected = result
+                else:
+                    # It's a property
+                    is_connected = is_connected_method
+            else:
+                # Fallback: check ib_client.ib.isConnected()
+                is_connected = ib_client.ib.isConnected() if hasattr(ib_client, 'ib') else False
+        except TypeError as te:
+            if "can't be used in 'await' expression" in str(te):
+                # is_connected returns bool directly, don't await
+                is_connected = ib_client.is_connected() if callable(ib_client.is_connected) else getattr(ib_client, 'is_connected', False)
+            else:
+                raise
+        
+        return {
+            "connected": is_connected,
+            "timestamp": datetime.now().isoformat()
+        }
 
     except Exception as e:
         logger.error(f"Error getting connection status: {str(e)}")
         return {
             "connected": False,
-            "error": str(e)
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
         }
 
 # ============ ACCOUNT ENDPOINTS ============
@@ -367,10 +331,21 @@ async def get_account_info():
                 detail="IB Client Service not available"
             )
 
-        if not ib_client.is_connected():
+        # Safe connection check
+        is_connected = False
+        try:
+            if hasattr(ib_client, 'is_connected'):
+                result = ib_client.is_connected() if callable(ib_client.is_connected) else ib_client.is_connected
+                is_connected = await result if hasattr(result, '__await__') else result
+            elif hasattr(ib_client, 'ib') and hasattr(ib_client.ib, 'isConnected'):
+                is_connected = ib_client.ib.isConnected()
+        except:
+            is_connected = False
+
+        if not is_connected:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Not connected to IB. Call /connect first."
+                detail="Not connected to IB"
             )
 
         logger.info("📤 Getting account info")
@@ -398,7 +373,18 @@ async def get_market_data(data: dict):
                 detail="IB Client Service not available"
             )
 
-        if not ib_client.is_connected():
+        # Safe connection check
+        is_connected = False
+        try:
+            if hasattr(ib_client, 'is_connected'):
+                result = ib_client.is_connected() if callable(ib_client.is_connected) else ib_client.is_connected
+                is_connected = await result if hasattr(result, '__await__') else result
+            elif hasattr(ib_client, 'ib'):
+                is_connected = ib_client.ib.isConnected()
+        except:
+            is_connected = False
+
+        if not is_connected:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Not connected to IB"
@@ -436,7 +422,17 @@ async def get_positions():
                 detail="Service unavailable"
             )
 
-        if not ib_client.is_connected():
+        is_connected = False
+        try:
+            if hasattr(ib_client, 'is_connected'):
+                result = ib_client.is_connected() if callable(ib_client.is_connected) else ib_client.is_connected
+                is_connected = await result if hasattr(result, '__await__') else result
+            elif hasattr(ib_client, 'ib'):
+                is_connected = ib_client.ib.isConnected()
+        except:
+            pass
+
+        if not is_connected:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Not connected to IB"
@@ -463,7 +459,17 @@ async def get_orders():
                 detail="Service unavailable"
             )
 
-        if not ib_client.is_connected():
+        is_connected = False
+        try:
+            if hasattr(ib_client, 'is_connected'):
+                result = ib_client.is_connected() if callable(ib_client.is_connected) else ib_client.is_connected
+                is_connected = await result if hasattr(result, '__await__') else result
+            elif hasattr(ib_client, 'ib'):
+                is_connected = ib_client.ib.isConnected()
+        except:
+            pass
+
+        if not is_connected:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Not connected to IB"
@@ -490,7 +496,17 @@ async def place_order(data: dict):
                 detail="Service unavailable"
             )
 
-        if not ib_client.is_connected():
+        is_connected = False
+        try:
+            if hasattr(ib_client, 'is_connected'):
+                result = ib_client.is_connected() if callable(ib_client.is_connected) else ib_client.is_connected
+                is_connected = await result if hasattr(result, '__await__') else result
+            elif hasattr(ib_client, 'ib'):
+                is_connected = ib_client.ib.isConnected()
+        except:
+            pass
+
+        if not is_connected:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Not connected to IB"
@@ -508,7 +524,6 @@ async def place_order(data: dict):
                 detail="action must be BUY or SELL"
             )
 
-        # Remove duplicate keys before unpacking
         filtered_data = dict(data)
         for key in ['order_type', 'quantity', 'action', 'contract_type', 'limit_price']:
             filtered_data.pop(key, None)
@@ -543,7 +558,17 @@ async def cancel_order(order_id: int):
                 detail="Service unavailable"
             )
 
-        if not ib_client.is_connected():
+        is_connected = False
+        try:
+            if hasattr(ib_client, 'is_connected'):
+                result = ib_client.is_connected() if callable(ib_client.is_connected) else ib_client.is_connected
+                is_connected = await result if hasattr(result, '__await__') else result
+            elif hasattr(ib_client, 'ib'):
+                is_connected = ib_client.ib.isConnected()
+        except:
+            pass
+
+        if not is_connected:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Not connected to IB"
@@ -574,13 +599,23 @@ async def get_status():
                 "timestamp": datetime.now().isoformat()
             }
 
+        is_connected = False
+        try:
+            if hasattr(ib_client, 'is_connected'):
+                result = ib_client.is_connected() if callable(ib_client.is_connected) else ib_client.is_connected
+                is_connected = await result if hasattr(result, '__await__') else result
+            elif hasattr(ib_client, 'ib'):
+                is_connected = ib_client.ib.isConnected()
+        except:
+            pass
+
         status_data = {
             "service_available": True,
-            "connected": ib_client.is_connected(),
+            "connected": is_connected,
             "timestamp": datetime.now().isoformat()
         }
 
-        if ib_client.is_connected():
+        if is_connected:
             account_info = await ib_client.get_account_info()
             status_data.update(account_info)
 

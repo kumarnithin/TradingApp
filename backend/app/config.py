@@ -4,11 +4,14 @@ Defines database connection and session management
 """
 
 import os
+import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # ==================== DATABASE CONFIGURATION ====================
 
@@ -18,7 +21,7 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:password@localhost/trading_app"
 )
 
-print(f"📊 Database URL: {DATABASE_URL}")
+logger.info(f"📊 Database URL: {DATABASE_URL}")
 
 # Create SQLAlchemy engine
 engine = create_engine(
@@ -60,8 +63,7 @@ def init_db():
     
     try:
         Base.metadata.create_all(bind=engine)
-        print("✅ Database tables created/verified")
+        logger.info("✅ Database tables created/verified")
     except Exception as e:
-        print
-        (f"❌ Error creating tables: {str(e)}")
+        logger.error(f"❌ Error creating tables: {str(e)}")
         raise

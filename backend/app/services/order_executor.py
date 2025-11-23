@@ -1,6 +1,9 @@
 from ib_insync import IB, Stock, MarketOrder
 from typing import Dict, Optional
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 class OrderExecutor:
     """Executes orders on Interactive Brokers"""
@@ -22,17 +25,17 @@ class OrderExecutor:
         """Connect to IBKR Gateway"""
         try:
             await self.ib.connectAsync(self.host, self.port, self.client_id)
-            print(f"✅ Connected to IBKR at {self.host}:{self.port}")
+            logger.info(f"✅ Connected to IBKR at {self.host}:{self.port}")
             return True
         except Exception as e:
-            print(f"❌ Failed to connect to IBKR: {e}")
+            logger.error(f"❌ Failed to connect to IBKR: {e}")
             return False
     
     async def disconnect(self):
         """Disconnect from IBKR"""
         if self.ib.isConnected():
             self.ib.disconnect()
-            print("✅ Disconnected from IBKR")
+            logger.info("✅ Disconnected from IBKR")
     
     async def execute_market_order(
         self,
@@ -59,7 +62,7 @@ class OrderExecutor:
             trade = self.ib.placeOrder(contract, order)
             await asyncio.sleep(2)  # Wait for execution
             
-            print(f"✅ Order placed: {action} {quantity} {symbol}")
+            logger.info(f"✅ Order placed: {action} {quantity} {symbol}")
             
             return {
                 "status": "success",
@@ -70,7 +73,7 @@ class OrderExecutor:
             }
             
         except Exception as e:
-            print(f"❌ Order failed: {e}")
+            logger.error(f"❌ Order failed: {e}")
             return {
                 "status": "error",
                 "message": str(e)

@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -74,7 +75,7 @@ export default function SignalsPage() {
         setStatus(response.data.system)
       }
     } catch (error) {
-      console.error('Error loading status:', error)
+      logger.error('Error loading status:', error)
     }
   }
 
@@ -85,7 +86,7 @@ export default function SignalsPage() {
         setConfig(response.data.config)
       }
     } catch (error) {
-      console.error('Error loading config:', error)
+      logger.error('Error loading config:', error)
     }
   }
 
@@ -96,7 +97,7 @@ export default function SignalsPage() {
         setHistory(response.data.history.reverse())
       }
     } catch (error) {
-      console.error('Error loading history:', error)
+      logger.error('Error loading history:', error)
     }
   }
 
@@ -105,11 +106,11 @@ export default function SignalsPage() {
     try {
       const response = await axios.post(`${API_URL}/api/v1/signals/config`, config)
       if (response.data.status === 'success') {
-        alert('✅ Configuration updated successfully!')
+        alert('âœ… Configuration updated successfully!')
         loadConfig()
       }
     } catch (error: any) {
-      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
+      alert(`âŒ Error: ${error.response?.data?.detail || error.message}`)
     }
     setLoading(false)
   }
@@ -123,7 +124,7 @@ export default function SignalsPage() {
         loadConfig()
       }
     } catch (error: any) {
-      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
+      alert(`âŒ Error: ${error.response?.data?.detail || error.message}`)
     }
     setLoading(false)
   }
@@ -137,7 +138,7 @@ export default function SignalsPage() {
         loadStatus()
       }
     } catch (error: any) {
-      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
+      alert(`âŒ Error: ${error.response?.data?.detail || error.message}`)
     }
     setLoading(false)
   }
@@ -147,18 +148,18 @@ export default function SignalsPage() {
     try {
       const response = await axios.post(`${API_URL}/api/v1/signals/test`)
       if (response.data.status === 'success') {
-        alert('✅ Test signal sent!')
+        alert('âœ… Test signal sent!')
         loadHistory()
       }
     } catch (error: any) {
-      alert(`❌ Error: ${error.response?.data?.detail || error.message}`)
+      alert(`âŒ Error: ${error.response?.data?.detail || error.message}`)
     }
     setLoading(false)
   }
 
   const copyWebhookUrl = () => {
     navigator.clipboard.writeText(webhookUrl)
-    alert('✅ Webhook URL copied to clipboard!')
+    alert('âœ… Webhook URL copied to clipboard!')
   }
 
   return (
@@ -166,7 +167,7 @@ export default function SignalsPage() {
       {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-          🤖 Auto Trading - TradingView Signals
+          ðŸ¤– Auto Trading - TradingView Signals
         </h1>
         <p style={{ color: '#666' }}>Automatically execute trades from TradingView alerts</p>
       </div>
@@ -184,7 +185,7 @@ export default function SignalsPage() {
             <div>
               <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>IB Connection</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {status.connected_to_ib ? '🟢 Connected' : '🔴 Disconnected'}
+                {status.connected_to_ib ? 'ðŸŸ¢ Connected' : 'ðŸ”´ Disconnected'}
               </div>
               <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
                 {status.account.name}
@@ -194,7 +195,7 @@ export default function SignalsPage() {
             <div>
               <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Auto Execute</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {status.auto_execute_enabled ? '✅ ENABLED' : '❌ DISABLED'}
+                {status.auto_execute_enabled ? 'âœ… ENABLED' : 'âŒ DISABLED'}
               </div>
             </div>
 
@@ -223,7 +224,7 @@ export default function SignalsPage() {
                 cursor: 'pointer'
               }}
             >
-              {status.auto_execute_enabled ? '⛔ Disable' : '✅ Enable'}
+              {status.auto_execute_enabled ? 'â›” Disable' : 'âœ… Enable'}
             </button>
 
             <button
@@ -239,7 +240,7 @@ export default function SignalsPage() {
                 cursor: 'pointer'
               }}
             >
-              🔄 Reset Count
+              ðŸ”„ Reset Count
             </button>
 
             <button
@@ -255,7 +256,7 @@ export default function SignalsPage() {
                 cursor: 'pointer'
               }}
             >
-              🧪 Test Signal
+              ðŸ§ª Test Signal
             </button>
           </div>
         </div>
@@ -269,7 +270,7 @@ export default function SignalsPage() {
         background: 'white',
         marginBottom: '2rem'
       }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem' }}>⚙️ Configuration</h2>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem' }}>âš™ï¸ Configuration</h2>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
           <div>
@@ -399,7 +400,7 @@ export default function SignalsPage() {
             cursor: 'pointer'
           }}
         >
-          {loading ? '⏳ Saving...' : '💾 Save Configuration'}
+          {loading ? 'â³ Saving...' : 'ðŸ’¾ Save Configuration'}
         </button>
       </div>
 
@@ -411,7 +412,7 @@ export default function SignalsPage() {
         background: '#f9fafb',
         marginBottom: '2rem'
       }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>🔗 TradingView Webhook Setup</h2>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>ðŸ”— TradingView Webhook Setup</h2>
 
         <div style={{ background: 'white', padding: '1.5rem', borderRadius: '4px', marginBottom: '1rem' }}>
           <p style={{ color: '#666', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
@@ -443,7 +444,7 @@ export default function SignalsPage() {
                 cursor: 'pointer'
               }}
             >
-              📋 Copy
+              ðŸ“‹ Copy
             </button>
           </div>
         </div>
@@ -479,7 +480,7 @@ export default function SignalsPage() {
         padding: '2rem',
         background: 'white'
       }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>📝 Signal History</h2>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>ðŸ“ Signal History</h2>
         <div style={{
           border: '1px solid #e5e7eb',
           borderRadius: '8px',
@@ -500,7 +501,7 @@ export default function SignalsPage() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span style={{ fontSize: '1.25rem' }}>
-                    {event.type === 'success' ? '✅' : event.type === 'error' ? '❌' : event.type === 'warning' ? '⚠️' : event.type === 'info' ? 'ℹ️' : '📨'}
+                    {event.type === 'success' ? 'âœ…' : event.type === 'error' ? 'âŒ' : event.type === 'warning' ? 'âš ï¸' : event.type === 'info' ? 'â„¹ï¸' : 'ðŸ“¨'}
                   </span>
                   <span>{event.message}</span>
                 </div>

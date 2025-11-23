@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
@@ -63,7 +63,7 @@ export default function SignalsPage() {
       }
       setError(null)
     } catch (err: any) {
-      console.error('Error loading status:', err.message)
+      logger.error('Error loading status:', err.message)
       setError('Failed to load system status')
     }
   }
@@ -77,7 +77,7 @@ export default function SignalsPage() {
       setLoading(false)
       setError(null)
     } catch (err: any) {
-      console.error('Error loading config:', err.message)
+      logger.error('Error loading config:', err.message)
       setError('Failed to load signal configuration')
       setLoading(false)
     }
@@ -91,7 +91,7 @@ export default function SignalsPage() {
       }
       setError(null)
     } catch (err: any) {
-      console.error('Error loading history:', err.message)
+      logger.error('Error loading history:', err.message)
     }
   }
 
@@ -102,7 +102,7 @@ export default function SignalsPage() {
       await loadStatus()
       setError(null)
     } catch (err: any) {
-      console.error('Error toggling:', err.message)
+      logger.error('Error toggling:', err.message)
       setError('Failed to toggle auto-execute')
     }
   }
@@ -114,7 +114,7 @@ export default function SignalsPage() {
       await loadConfig()
       setError(null)
     } catch (err: any) {
-      console.error('Error resetting:', err.message)
+      logger.error('Error resetting:', err.message)
       setError('Failed to reset daily count')
     }
   }
@@ -124,7 +124,7 @@ export default function SignalsPage() {
   }
 
   const getStatusText = (connected: boolean) => {
-    return connected ? '🟢 Connected' : '🔴 Disconnected'
+    return connected ? 'ðŸŸ¢ Connected' : 'ðŸ”´ Disconnected'
   }
 
   if (loading) {
@@ -139,7 +139,7 @@ export default function SignalsPage() {
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold' }}>📨 TradingView Signals</h1>
+        <h1 style={{ fontSize: '2rem', fontWeight: 'bold' }}>ðŸ“¨ TradingView Signals</h1>
         <p style={{ color: '#666', marginTop: '0.5rem' }}>
           Configure and monitor TradingView webhook alerts
         </p>
@@ -157,7 +157,7 @@ export default function SignalsPage() {
             color: '#7f1d1d',
           }}
         >
-          ⚠️ {error}
+          âš ï¸ {error}
         </div>
       )}
 
@@ -173,7 +173,7 @@ export default function SignalsPage() {
           }}
         >
           <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 'bold' }}>
-            🔌 System Status
+            ðŸ”Œ System Status
           </h2>
 
           <div
@@ -223,7 +223,7 @@ export default function SignalsPage() {
                   color: status.auto_execute_enabled ? '#10b981' : '#ef4444',
                 }}
               >
-                {status.auto_execute_enabled ? '🟢 Enabled' : '🔴 Disabled'}
+                {status.auto_execute_enabled ? 'ðŸŸ¢ Enabled' : 'ðŸ”´ Disabled'}
               </div>
             </div>
 
@@ -289,7 +289,7 @@ export default function SignalsPage() {
           }}
         >
           <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 'bold' }}>
-            ⚙️ Configuration
+            âš™ï¸ Configuration
           </h2>
 
           <div style={{ display: 'grid', gap: '1rem' }}>
@@ -336,7 +336,7 @@ export default function SignalsPage() {
                 fontSize: '1rem',
               }}
             >
-              {config.auto_execute ? '🔴 Disable Auto-Execute' : '🟢 Enable Auto-Execute'}
+              {config.auto_execute ? 'ðŸ”´ Disable Auto-Execute' : 'ðŸŸ¢ Enable Auto-Execute'}
             </button>
 
             <button
@@ -352,7 +352,7 @@ export default function SignalsPage() {
                 fontSize: '1rem',
               }}
             >
-              🔄 Reset Daily Counter
+              ðŸ”„ Reset Daily Counter
             </button>
           </div>
         </div>
@@ -369,7 +369,7 @@ export default function SignalsPage() {
         }}
       >
         <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 'bold', color: '#1e40af' }}>
-          📨 TradingView Webhook Setup
+          ðŸ“¨ TradingView Webhook Setup
         </h2>
 
         <div style={{ marginBottom: '1.5rem' }}>
@@ -431,7 +431,7 @@ export default function SignalsPage() {
         }}
       >
         <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 'bold' }}>
-          📜 Recent Signal History ({history.length})
+          ðŸ“œ Recent Signal History ({history.length})
         </h2>
 
         {history.length > 0 ? (
@@ -497,11 +497,12 @@ export default function SignalsPage() {
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export default function SignalsPage() {
-  // 1️⃣ ADD STATE VARIABLES
+  // 1ï¸âƒ£ ADD STATE VARIABLES
   const [signals, setSignals] = useState([])
   const [loading, setLoading] = useState(false)
   
@@ -511,7 +512,7 @@ export default function SignalsPage() {
   const [showAllAccounts, setShowAllAccounts] = useState(false)
   const [isMultiSelect, setIsMultiSelect] = useState(false)
 
-  // 2️⃣ LOAD SAVED FILTER (Run once on mount)
+  // 2ï¸âƒ£ LOAD SAVED FILTER (Run once on mount)
   useEffect(() => {
     const savedShowAll = localStorage.getItem('showAllAccounts')
     const savedAccountId = localStorage.getItem('currentAccountId')
@@ -534,7 +535,7 @@ export default function SignalsPage() {
     }
   }, []) // Empty array = run only once
 
-  // 3️⃣ LISTEN FOR ACCOUNT SWITCHER CHANGES
+  // 3ï¸âƒ£ LISTEN FOR ACCOUNT SWITCHER CHANGES
   useEffect(() => {
     const handleAccountChange = (event) => {
       const { account, showAll, selectedAccounts: selected, isMultiSelect: multiSelect } = event.detail
@@ -561,13 +562,13 @@ export default function SignalsPage() {
     return () => window.removeEventListener('accountChanged', handleAccountChange)
   }, []) // Empty array = run only once
 
-  // 4️⃣ RELOAD DATA WHEN FILTER CHANGES
+  // 4ï¸âƒ£ RELOAD DATA WHEN FILTER CHANGES
   useEffect(() => {
     loadSignals()
   }, [currentAccountId, selectedAccounts, showAllAccounts, isMultiSelect])
   // These 4 variables are dependencies - when ANY change, reload data
 
-  // 5️⃣ BUILD API URL AND FETCH DATA
+  // 5ï¸âƒ£ BUILD API URL AND FETCH DATA
   const loadSignals = async () => {
     try {
       setLoading(true)
@@ -587,12 +588,12 @@ export default function SignalsPage() {
       setSignals(response.data.signals || [])
       setLoading(false)
     } catch (error) {
-      console.error('Error loading signals:', error)
+      logger.error('Error loading signals:', error)
       setLoading(false)
     }
   }
 
-  // 6️⃣ RENDER THE PAGE
+  // 6ï¸âƒ£ RENDER THE PAGE
   return (
     <div style={{ padding: '2rem' }}>
       <h1>Signals</h1>
@@ -607,10 +608,10 @@ export default function SignalsPage() {
         display: 'inline-block'
       }}>
         {isMultiSelect
-          ? `✅ ${selectedAccounts.length} Selected`
+          ? `âœ… ${selectedAccounts.length} Selected`
           : showAllAccounts
-            ? '📊 All Accounts'
-            : '🏢 Single Account'
+            ? 'ðŸ“Š All Accounts'
+            : 'ðŸ¢ Single Account'
         }
       </div>
 

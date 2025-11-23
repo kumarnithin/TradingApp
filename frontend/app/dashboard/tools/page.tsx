@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -47,7 +48,7 @@ export default function ToolsPage() {
       })
       setPosResult(res.data.calculation)
     } catch (error) {
-      console.error('Position calc error:', error)
+      logger.error('Position calc error:', error)
     }
   }
 
@@ -63,7 +64,7 @@ export default function ToolsPage() {
       })
       setRrResult(res.data.analysis)
     } catch (error) {
-      console.error('Risk/Reward error:', error)
+      logger.error('Risk/Reward error:', error)
     }
   }
 
@@ -77,7 +78,7 @@ export default function ToolsPage() {
       })
       setDdResult(res.data.drawdown_metrics)
     } catch (error) {
-      console.error('Drawdown error:', error)
+      logger.error('Drawdown error:', error)
     }
   }
 
@@ -92,7 +93,7 @@ export default function ToolsPage() {
       })
       setKellyResult(res.data.kelly)
     } catch (error) {
-      console.error('Kelly error:', error)
+      logger.error('Kelly error:', error)
     }
   }
 

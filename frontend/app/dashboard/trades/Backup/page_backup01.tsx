@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './trades.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -39,7 +40,7 @@ export default function TradesPage() {
       setTrades(response.data)
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching trades:', error)
+      logger.error('Error fetching trades:', error)
       setLoading(false)
     }
   }
@@ -120,7 +121,7 @@ export default function TradesPage() {
         <div className={`${styles.statCard} glass-light`}>
           <div className={styles.statHeader}>
             <span className={styles.statLabel}>Total P&L</span>
-            <span className={styles.statIcon}>💰</span>
+            <span className={styles.statIcon}>ðŸ’°</span>
           </div>
           <p className={`${styles.statValue} ${totalPnL >= 0 ? styles.positive : styles.negative}`}>
             ${totalPnL.toFixed(2)}
@@ -131,7 +132,7 @@ export default function TradesPage() {
         <div className={`${styles.statCard} glass-light`}>
           <div className={styles.statHeader}>
             <span className={styles.statLabel}>Win Rate</span>
-            <span className={styles.statIcon}>🎯</span>
+            <span className={styles.statIcon}>ðŸŽ¯</span>
           </div>
           <p className={styles.statValue}>{winRate.toFixed(1)}%</p>
           <p className={styles.statSubtext}>{winningTrades.length} wins / {closedTrades.length - winningTrades.length} losses</p>
@@ -140,7 +141,7 @@ export default function TradesPage() {
         <div className={`${styles.statCard} glass-light`}>
           <div className={styles.statHeader}>
             <span className={styles.statLabel}>Best Trade</span>
-            <span className={styles.statIcon}>🚀</span>
+            <span className={styles.statIcon}>ðŸš€</span>
           </div>
           <p className={`${styles.statValue} ${styles.positive}`}>+${bestTrade.toFixed(2)}</p>
           <p className={styles.statSubtext}>Highest profit</p>
@@ -149,7 +150,7 @@ export default function TradesPage() {
         <div className={`${styles.statCard} glass-light`}>
           <div className={styles.statHeader}>
             <span className={styles.statLabel}>Worst Trade</span>
-            <span className={styles.statIcon}>📉</span>
+            <span className={styles.statIcon}>ðŸ“‰</span>
           </div>
           <p className={`${styles.statValue} ${styles.negative}`}>${worstTrade.toFixed(2)}</p>
           <p className={styles.statSubtext}>Largest loss</p>
@@ -160,7 +161,7 @@ export default function TradesPage() {
       {openPositions.length > 0 && (
         <div className={`${styles.openPositions} glass-light`}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>🔥 Open Positions</h2>
+            <h2 className={styles.sectionTitle}>ðŸ”¥ Open Positions</h2>
             <span className={styles.positionBadge}>{openPositions.length} active</span>
           </div>
           <div className={styles.positionsGrid}>
@@ -231,7 +232,7 @@ export default function TradesPage() {
           className={styles.exportButton}
           onClick={exportToCSV}
         >
-          📥 Export CSV
+          ðŸ“¥ Export CSV
         </button>
       </div>
 

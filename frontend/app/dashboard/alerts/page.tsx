@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -39,7 +40,7 @@ export default function AlertsPage() {
       const res = await axios.get(`${API_URL}/api/v1/alerts/symbols/search?query=${query}`)
       setSearchResults(res.data.results || [])
     } catch (error) {
-      console.error('Search error:', error)
+      logger.error('Search error:', error)
     }
   }
 
@@ -54,8 +55,8 @@ export default function AlertsPage() {
         const res = await axios.get(`${API_URL}/api/v1/alerts/symbols/map?ib_symbol=${ibSymbol}`)
         setTvSymbol(res.data.tradingview_symbol)
       } catch (error) {
-        console.error('Mapping error:', error)
-      }
+          logger.error('Mapping error:', error)
+        }
     }
     mapSymbol()
   }, [ibSymbol])

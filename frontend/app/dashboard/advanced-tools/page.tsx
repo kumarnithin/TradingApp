@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -42,7 +43,7 @@ export default function AdvancedToolsPage() {
       })
       setOptResult(res.data.optimization)
     } catch (error) {
-      console.error('Optimization error:', error)
+      logger.error('Optimization error:', error)
     }
   }
 
@@ -51,7 +52,7 @@ export default function AdvancedToolsPage() {
       const res = await axios.get(`${API_URL}/api/v1/advanced-tools/economic-calendar`)
       setCalendarResult(res.data.calendar)
     } catch (error) {
-      console.error('Calendar error:', error)
+      logger.error('Calendar error:', error)
     }
   }
 
@@ -64,7 +65,7 @@ export default function AdvancedToolsPage() {
       const res = await axios.post(`${API_URL}/api/v1/advanced-tools/correlation-matrix?${params}`)
       setCorrResult(res.data.correlation)
     } catch (error) {
-      console.error('Correlation error:', error)
+      logger.error('Correlation error:', error)
     }
   }
 
@@ -73,7 +74,7 @@ export default function AdvancedToolsPage() {
       const res = await axios.get(`${API_URL}/api/v1/advanced-tools/market-conditions`)
       setVolResult(res.data.market)
     } catch (error) {
-      console.error('Volatility error:', error)
+      logger.error('Volatility error:', error)
     }
   }
 
@@ -82,7 +83,7 @@ export default function AdvancedToolsPage() {
       const res = await axios.get(`${API_URL}/api/v1/advanced-tools/trading-sessions`)
       setSessionsResult(res.data.sessions)
     } catch (error) {
-      console.error('Sessions error:', error)
+      logger.error('Sessions error:', error)
     }
   }
 

@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .routes import webhook, orders, account
 import uvicorn
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create all database tables
 # This line looks at models.py and creates corresponding tables in the database
@@ -62,12 +65,12 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     """Display info when server starts"""
-    print("=" * 60)
-    print("🚀 Trading Automation API Starting...")
-    print("📊 API Documentation: http://localhost:8000/docs")
-    print("🔧 Alternative Docs: http://localhost:8000/redoc")
-    print("❤️  Health Check: http://localhost:8000/health")
-    print("=" * 60)
+    logger.info("%s", "=" * 60)
+    logger.info("🚀 Trading Automation API Starting...")
+    logger.info("📊 API Documentation: http://localhost:8000/docs")
+    logger.info("🔧 Alternative Docs: http://localhost:8000/redoc")
+    logger.info("❤️  Health Check: http://localhost:8000/health")
+    logger.info("%s", "=" * 60)
 
 # Run application (for development)
 if __name__ == "__main__":

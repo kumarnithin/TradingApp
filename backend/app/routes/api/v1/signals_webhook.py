@@ -26,10 +26,10 @@ def get_db():
 # ✅ YOUR PASSPHRASE
 TRADINGVIEW_PASSPHRASE = "Nits@signal"
 
-print("=" * 60)
-print("🌐 TRADINGVIEW WEBHOOK ADAPTER LOADED")
-print(f"✅ Passphrase set to: {TRADINGVIEW_PASSPHRASE}")
-print("=" * 60)
+logger.info("%s", "=" * 60)
+logger.info("🌐 TRADINGVIEW WEBHOOK ADAPTER LOADED")
+logger.info("✅ Passphrase configured for TradingView webhook (redacted)")
+logger.info("%s", "=" * 60)
 
 @router.post("/tradingview")
 async def receive_tradingview_alert(
@@ -55,33 +55,33 @@ async def receive_tradingview_alert(
     }
     """
     
-    print("\n" + "=" * 60)
-    print("🚨 TRADINGVIEW ALERT RECEIVED!")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("🚨 TRADINGVIEW ALERT RECEIVED!")
+    logger.info("%s", "=" * 60)
     
     try:
         # Parse request
-        try:
-            body = await request.json()
-            print(f"📨 Body: {body}")
+            try:
+                body = await request.json()
+                logger.debug("📨 Body: %s", body)
         except:
             try:
                 form_data = await request.form()
                 body = dict(form_data)
-                print(f"📨 Form: {body}")
+                logger.debug("📨 Form: %s", body)
             except:
-                print("❌ Could not parse body")
+                logger.error("❌ Could not parse body")
                 raise HTTPException(status_code=400, detail="Invalid request format")
         
         # Check passphrase
         passphrase = body.get("passphrase", "")
-        print(f"🔐 Passphrase: {passphrase}")
+        logger.debug("🔐 Passphrase received (redacted)")
         
         if passphrase != TRADINGVIEW_PASSPHRASE:
-            print(f"❌ MISMATCH! Expected: {TRADINGVIEW_PASSPHRASE}")
+            logger.warning("❌ Passphrase mismatch for incoming webhook")
             raise HTTPException(status_code=401, detail="Invalid passphrase")
-        
-        print("✅ Passphrase OK!")
+
+        logger.info("✅ Passphrase validated for incoming webhook")
         
         # Extract TradingView fields
         ticker = body.get("ticker", "UNKNOWN")
@@ -89,10 +89,10 @@ async def receive_tradingview_alert(
         quantity = float(body.get("quantity", 1))
         price = float(body.get("price", 0))
         
-        print(f"📊 Signal: {action} {quantity} {ticker} @ {price}")
+        logger.info("📊 Signal: %s %s %s @ %s", action, quantity, ticker, price)
         
         if not account_id:
-            print("❌ account_id required!")
+            logger.error("❌ account_id required in query params")
             raise HTTPException(status_code=400, detail="account_id required in query params")
         
         # Convert to signals.py format
@@ -109,7 +109,7 @@ async def receive_tradingview_alert(
             "take_profit": None
         }
         
-        print(f"🔄 Converting to internal format: {signal_data}")
+        logger.debug("🔄 Converting to internal format: %s", signal_data)
         
         # Call your existing signals.py webhook endpoint
         from app.routes.api.v1.signals import receive_tradingview_signal as signals_webhook
@@ -131,23 +131,23 @@ async def receive_tradingview_alert(
         
         signal_obj = SignalCreate(**signal_data)
         
-        print(f"📤 Calling signals webhook...")
+        logger.info("📤 Calling signals webhook...")
         
         # Call existing endpoint
         result = await signals_webhook(signal_obj, db)
         
-        print(f"✅ SUCCESS! Result: {result}")
-        print("=" * 60 + "\n")
+        logger.info("✅ SUCCESS! Result: %s", result)
+        logger.info("%s\n", "=" * 60)
         
         return result
     
     except HTTPException as e:
-        print(f"❌ ERROR: {e.detail}")
-        print("=" * 60 + "\n")
+        logger.error("❌ ERROR: %s", e.detail)
+        logger.info("%s\n", "=" * 60)
         raise
     except Exception as e:
-        print(f"❌ ERROR: {str(e)}")
-        print("=" * 60 + "\n")
+        logger.exception("❌ ERROR: %s", str(e))
+        logger.info("%s\n", "=" * 60)
         raise HTTPException(status_code=500, detail=str(e))
 
 # Health check

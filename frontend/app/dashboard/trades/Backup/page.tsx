@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -86,7 +87,7 @@ export default function TradesPage() {
           setAccounts(res.data.accounts)
         }
       } catch (e) {
-        console.error('Error fetching accounts:', e)
+        logger.error('Error fetching accounts:', e)
       }
     }
     fetchAccounts()
@@ -119,7 +120,7 @@ export default function TradesPage() {
       }
       setError(null)
     } catch (e) {
-      console.error('Error fetching trades:', e)
+      logger.error('Error fetching trades:', e)
       setError('Failed to fetch trades')
       setTrades([])
     } finally {
@@ -137,7 +138,7 @@ export default function TradesPage() {
         setStats(res.data.stats)
       }
     } catch (e) {
-      console.error('Error fetching stats:', e)
+      logger.error('Error fetching stats:', e)
     }
   }
 
@@ -269,7 +270,7 @@ export default function TradesPage() {
       {selectedAccountId && (
         <div style={{ background: '#1e40af', border: '1px solid #3b82f6', borderRadius: '8px', padding: '12px 16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: '14px', fontWeight: 600, color: '#bfdbfe' }}>
-            🔍 Filtered by account
+            ðŸ” Filtered by account
           </div>
           <button 
             onClick={clearFilter}
@@ -283,7 +284,7 @@ export default function TradesPage() {
       {/* Error */}
       {error && (
         <div style={{ background: '#7f1d1d', border: '1px solid #dc2626', borderRadius: '8px', padding: '16px', color: '#fca5a5', marginBottom: '24px' }}>
-          ⚠️ {error}
+          âš ï¸ {error}
         </div>
       )}
 
@@ -316,10 +317,10 @@ export default function TradesPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid #334155', paddingBottom: '16px' }}>
         <button onClick={() => setActiveTab('view')} style={{ background: activeTab === 'view' ? '#3b82f6' : 'transparent', border: 'none', color: '#fff', padding: '8px 16px', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-          📋 Trades ({trades.length})
+          ðŸ“‹ Trades ({trades.length})
         </button>
         <button onClick={() => { setActiveTab('create'); setFormData({ ...formData, account_id: selectedAccountId || '' }); }} style={{ background: activeTab === 'create' ? '#3b82f6' : 'transparent', border: 'none', color: '#fff', padding: '8px 16px', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
-          ➕ New Trade
+          âž• New Trade
         </button>
       </div>
 
@@ -398,7 +399,7 @@ export default function TradesPage() {
       {/* CREATE TAB */}
       {activeTab === 'create' && (
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '24px', maxWidth: '600px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px' }}>➕ New Trade</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px' }}>âž• New Trade</h2>
           <form onSubmit={handleCreateTrade}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Account *</label>
@@ -464,7 +465,7 @@ export default function TradesPage() {
       {/* EDIT TAB */}
       {activeTab === 'edit' && editingId && (
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '24px', maxWidth: '600px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px' }}>✏️ Update Trade</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px' }}>âœï¸ Update Trade</h2>
           <form onSubmit={(e) => handleUpdateTrade(e, editingId)}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Exit Price</label>

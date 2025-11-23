@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const USER_ID = 'user123'
@@ -77,7 +78,7 @@ export default function TradingDisciplinePage() {
       setTemplates(response.data.templates || [])
       setError('')
     } catch (err) {
-      console.error('Error fetching templates:', err)
+      logger.error('Error fetching templates:', err)
       setError('Failed to fetch templates')
     } finally {
       setLoading(false)
@@ -94,7 +95,7 @@ export default function TradingDisciplinePage() {
       setAnalytics(response.data.statistics)
       setError('')
     } catch (err) {
-      console.error('Error fetching analytics:', err)
+      logger.error('Error fetching analytics:', err)
       setError('Failed to fetch analytics')
     } finally {
       setLoading(false)
@@ -136,7 +137,7 @@ export default function TradingDisciplinePage() {
         setSuccess('')
       }, 1500)
     } catch (err: any) {
-      console.error('Error:', err)
+      logger.error('Error:', err)
       setError(err.response?.data?.detail || 'Failed to create template')
     } finally {
       setLoading(false)
@@ -179,7 +180,7 @@ export default function TradingDisciplinePage() {
       
       setTimeout(() => setSuccess(''), 3000)
     } catch (err: any) {
-      console.error('Error:', err)
+      logger.error('Error:', err)
       setError(err.response?.data?.detail || 'Failed to validate trade')
     } finally {
       setLoading(false)

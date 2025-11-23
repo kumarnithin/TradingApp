@@ -15,33 +15,36 @@ sys.path.insert(0, backend_dir)
 
 from sqlalchemy import text
 from app.database import engine
+import logging
+
+logger = logging.getLogger(__name__)
 
 def migrate_add_missing_columns():
     """Add ALL missing columns to existing tables"""
     
-    print("🔧 Starting FINAL database migration...")
-    print("=" * 70)
+    logger.info("🔧 Starting FINAL database migration...")
+    logger.info("%s", "=" * 70)
     
     with engine.connect() as connection:
         try:
             # ==================== ACCOUNTS TABLE ====================
-            print("\n📊 ACCOUNTS TABLE")
-            print("-" * 70)
+            logger.info("\n📊 ACCOUNTS TABLE")
+            logger.info("%s", "-" * 70)
             
             try:
                 connection.execute(text("ALTER TABLE accounts ADD COLUMN updated_at TIMESTAMP;"))
-                print("✅ Added: accounts.updated_at")
+                logger.info("✅ Added: accounts.updated_at")
                 connection.commit()
             except Exception as e:
                 if "already exists" in str(e) or "duplicate" in str(e):
-                    print("✓ Already exists: accounts.updated_at")
+                    logger.info("✓ Already exists: accounts.updated_at")
                 else:
-                    print(f"⚠️  Error: {e}")
+                    logger.warning("⚠️  Error: %s", e)
                 connection.rollback()
 
             # ==================== TRADES TABLE - ALL COLUMNS ====================
-            print("\n💰 TRADES TABLE")
-            print("-" * 70)
+            logger.info("\n💰 TRADES TABLE")
+            logger.info("%s", "-" * 70)
             
             columns_to_add = [
                 ("trade_type", "VARCHAR(50) DEFAULT 'Market'", "trade type (Market/Limit/Stop)"),
@@ -58,18 +61,18 @@ def migrate_add_missing_columns():
                 try:
                     sql = f"ALTER TABLE trades ADD COLUMN {col_name} {col_type};"
                     connection.execute(text(sql))
-                    print(f"✅ Added: trades.{col_name} ({description})")
+                    logger.info("✅ Added: trades.%s (%s)", col_name, description)
                     connection.commit()
                 except Exception as e:
                     if "already exists" in str(e) or "duplicate" in str(e):
-                        print(f"✓ Already exists: trades.{col_name}")
+                        logger.info("✓ Already exists: trades.%s", col_name)
                     else:
-                        print(f"⚠️  Error adding {col_name}: {e}")
+                        logger.warning("⚠️  Error adding %s: %s", col_name, e)
                     connection.rollback()
 
             # ==================== SIGNALS TABLE ====================
-            print("\n📡 SIGNALS TABLE")
-            print("-" * 70)
+            logger.info("\n📡 SIGNALS TABLE")
+            logger.info("%s", "-" * 70)
             
             signal_columns = [
                 ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP", "creation timestamp"),
@@ -80,18 +83,18 @@ def migrate_add_missing_columns():
                 try:
                     sql = f"ALTER TABLE signals ADD COLUMN {col_name} {col_type};"
                     connection.execute(text(sql))
-                    print(f"✅ Added: signals.{col_name} ({description})")
+                    logger.info("✅ Added: signals.%s (%s)", col_name, description)
                     connection.commit()
                 except Exception as e:
                     if "already exists" in str(e) or "duplicate" in str(e):
-                        print(f"✓ Already exists: signals.{col_name}")
+                        logger.info("✓ Already exists: signals.%s", col_name)
                     else:
-                        print(f"⚠️  Error adding {col_name}: {e}")
+                        logger.warning("⚠️  Error adding %s: %s", col_name, e)
                     connection.rollback()
 
             # ==================== ALERTS TABLE ====================
-            print("\n🔔 ALERTS TABLE")
-            print("-" * 70)
+            logger.info("\n🔔 ALERTS TABLE")
+            logger.info("%s", "-" * 70)
             
             alert_columns = [
                 ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP", "creation timestamp"),
@@ -102,43 +105,43 @@ def migrate_add_missing_columns():
                 try:
                     sql = f"ALTER TABLE alerts ADD COLUMN {col_name} {col_type};"
                     connection.execute(text(sql))
-                    print(f"✅ Added: alerts.{col_name} ({description})")
+                    logger.info("✅ Added: alerts.%s (%s)", col_name, description)
                     connection.commit()
                 except Exception as e:
                     if "already exists" in str(e) or "duplicate" in str(e):
-                        print(f"✓ Already exists: alerts.{col_name}")
+                        logger.info("✓ Already exists: alerts.%s", col_name)
                     else:
-                        print(f"⚠️  Error adding {col_name}: {e}")
+                        logger.warning("⚠️  Error adding %s: %s", col_name, e)
                     connection.rollback()
 
             # ==================== SUMMARY ====================
-            print("\n" + "=" * 70)
-            print("✅ MIGRATION COMPLETED SUCCESSFULLY!")
-            print("=" * 70)
-            print("\n✨ Database is now fully configured for all APIs:")
-            print("  ✅ Accounts API - Ready")
-            print("  ✅ Trades API - Ready")
-            print("  ✅ Signals API - Ready")
-            print("  ✅ Alerts API - Ready")
-            print("\n🚀 You can now use all endpoints!")
-            print("=" * 70)
+            logger.info("%s", "=" * 70)
+            logger.info("✅ MIGRATION COMPLETED SUCCESSFULLY!")
+            logger.info("%s", "=" * 70)
+            logger.info("\n✨ Database is now fully configured for all APIs:")
+            logger.info("  ✅ Accounts API - Ready")
+            logger.info("  ✅ Trades API - Ready")
+            logger.info("  ✅ Signals API - Ready")
+            logger.info("  ✅ Alerts API - Ready")
+            logger.info("\n🚀 You can now use all endpoints!")
+            logger.info("%s", "=" * 70)
 
         except Exception as e:
-            print(f"\n❌ FATAL ERROR: {e}")
+            logger.exception("\n❌ FATAL ERROR: %s", e)
             connection.rollback()
             raise
 
 if __name__ == "__main__":
     try:
         migrate_add_missing_columns()
-        print("\n✅ Restart your backend server:")
-        print("   Ctrl+C")
-        print("   python -m uvicorn app.main:app --reload")
+        logger.info("\n✅ Restart your backend server:")
+        logger.info("   Ctrl+C")
+        logger.info("   python -m uvicorn app.main:app --reload")
     except Exception as e:
-        print(f"\n❌ Migration failed: {e}")
-        print("\nTroubleshooting:")
-        print("  1. Make sure PostgreSQL is running")
-        print("  2. Virtual environment is activated (venv)")
-        print("  3. You're in: C:\\AI lab\\TradingApp\\backend")
-        print("  4. Database connection string is correct")
+        logger.exception("\n❌ Migration failed: %s", e)
+        logger.error("\nTroubleshooting:")
+        logger.error("  1. Make sure PostgreSQL is running")
+        logger.error("  2. Virtual environment is activated (venv)")
+        logger.error("  3. You're in: C:\\AI lab\\TradingApp\\backend")
+        logger.error("  4. Database connection string is correct")
         sys.exit(1)

@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './settings.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -78,7 +79,7 @@ export default function SettingsPage() {
       const response = await axios.get(`${API_URL}/api/v1/ib/status`)
       setConnectionStatus(response.data)
     } catch (error) {
-      console.error('Error checking connection:', error)
+      logger.error('Error checking connection:', error)
     }
   }
 
@@ -148,7 +149,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>🔌 IB Connection Manager</h1>
+          <h1 className={styles.pageTitle}>ðŸ”Œ IB Connection Manager</h1>
           <p className={styles.pageSubtitle}>Manage Interactive Brokers connections</p>
         </div>
         <div className={styles.headerActions}>
@@ -161,7 +162,7 @@ export default function SettingsPage() {
       {/* Overview Stats */}
       <div className={styles.statsGrid}>
         <div className={`${styles.statCard} glass-light`}>
-          <div className={styles.statIcon}>🟢</div>
+          <div className={styles.statIcon}>ðŸŸ¢</div>
           <div className={styles.statContent}>
             <p className={styles.statLabel}>Active Connections</p>
             <p className={styles.statValue}>{activeAccounts}</p>
@@ -169,7 +170,7 @@ export default function SettingsPage() {
         </div>
 
         <div className={`${styles.statCard} glass-light`}>
-          <div className={styles.statIcon}>🏦</div>
+          <div className={styles.statIcon}>ðŸ¦</div>
           <div className={styles.statContent}>
             <p className={styles.statLabel}>Total Accounts</p>
             <p className={styles.statValue}>{totalAccounts}</p>
@@ -177,7 +178,7 @@ export default function SettingsPage() {
         </div>
 
         <div className={`${styles.statCard} glass-light`}>
-          <div className={styles.statIcon}>⏱️</div>
+          <div className={styles.statIcon}>â±ï¸</div>
           <div className={styles.statContent}>
             <p className={styles.statLabel}>Uptime</p>
             <p className={styles.statValue}>99.5%</p>
@@ -195,19 +196,19 @@ export default function SettingsPage() {
               <div className={styles.cardHeader}>
                 <div className={styles.accountInfo}>
                   <h3 className={styles.accountName}>
-                    {account.accountType === 'DEMO' ? '🎯' : '💰'} {account.name}
+                    {account.accountType === 'DEMO' ? 'ðŸŽ¯' : 'ðŸ’°'} {account.name}
                   </h3>
                   <button 
                     className={styles.favoriteBtn}
                     onClick={() => toggleFavorite(account.id)}
                   >
-                    {account.isFavorite ? '⭐' : '☆'}
+                    {account.isFavorite ? 'â­' : 'â˜†'}
                   </button>
                 </div>
                 <div className={`${styles.statusBadge} ${
                   account.isConnected ? styles.statusConnected : styles.statusDisconnected
                 }`}>
-                  {account.isConnected ? '🟢 CONNECTED' : '⚪ DISCONNECTED'}
+                  {account.isConnected ? 'ðŸŸ¢ CONNECTED' : 'âšª DISCONNECTED'}
                 </div>
               </div>
 
@@ -280,7 +281,7 @@ export default function SettingsPage() {
           <div className={styles.healthItem}>
             <span className={styles.healthLabel}>Status</span>
             <span className={`${styles.healthValue} ${connectionStatus.isConnected ? styles.healthGood : styles.healthBad}`}>
-              {connectionStatus.isConnected ? '🟢 Healthy' : '🔴 Not Connected'}
+              {connectionStatus.isConnected ? 'ðŸŸ¢ Healthy' : 'ðŸ”´ Not Connected'}
             </span>
           </div>
           <div className={styles.healthItem}>
@@ -306,7 +307,7 @@ export default function SettingsPage() {
                   entry.type === 'error' ? styles.iconError :
                   styles.iconInfo
                 }`}>
-                  {entry.type === 'success' ? '✓' : entry.type === 'error' ? '✗' : 'ℹ'}
+                  {entry.type === 'success' ? 'âœ“' : entry.type === 'error' ? 'âœ—' : 'â„¹'}
                 </span>
                 <span className={styles.historyMessage}>{entry.message}</span>
                 <span className={styles.historyTime}>

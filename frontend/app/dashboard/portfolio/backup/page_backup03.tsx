@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import styles from './portfolio.module.css'
+import logger from '../../../utils/logger'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -35,7 +36,7 @@ export default function PortfolioPage() {
   
   const [newCatName, setNewCatName] = useState('')
   const [newCatDesc, setNewCatDesc] = useState('')
-  const [newCatIcon, setNewCatIcon] = useState('📈')
+  const [newCatIcon, setNewCatIcon] = useState('ðŸ“ˆ')
   
   const [newSymbol, setNewSymbol] = useState('')
   const [newSymbolName, setNewSymbolName] = useState('')
@@ -61,7 +62,7 @@ export default function PortfolioPage() {
         setActiveCategory(res.data.categories[0].id)
       }
     } catch (error) {
-      console.error('Error fetching categories:', error)
+      logger.error('Error fetching categories:', error)
     } finally {
       setLoading(false)
     }
@@ -72,7 +73,7 @@ export default function PortfolioPage() {
       const res = await axios.get(`${API_URL}/api/v1/portfolio/categories/${categoryId}/symbols`)
       setSymbols(res.data.symbols || [])
     } catch (error) {
-      console.error('Error fetching symbols:', error)
+      logger.error('Error fetching symbols:', error)
     }
   }
 
@@ -90,7 +91,7 @@ export default function PortfolioPage() {
       })
       setNewCatName('')
       setNewCatDesc('')
-      setNewCatIcon('📈')
+      setNewCatIcon('ðŸ“ˆ')
       setShowCategoryModal(false)
       await fetchCategories()
     } catch (error: any) {
@@ -183,14 +184,14 @@ export default function PortfolioPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>📊 Portfolio</h1>
+        <h1 className={styles.title}>ðŸ“Š Portfolio</h1>
         <p className={styles.subtitle}>Manage multiple watchlists by category</p>
       </div>
 
       <div className={styles.topSection}>
         <div className={styles.leftSection}>
           <div className={styles.sectionHeader}>
-            <h2>📋 Watchlists</h2>
+            <h2>ðŸ“‹ Watchlists</h2>
             <button className={styles.addBtn} onClick={() => setShowCategoryModal(true)}>
               + New
             </button>
@@ -226,7 +227,7 @@ export default function PortfolioPage() {
                       }}
                       title="Edit"
                     >
-                      ✎
+                      âœŽ
                     </button>
                     <button
                       className={styles.deleteBtn}
@@ -236,7 +237,7 @@ export default function PortfolioPage() {
                       }}
                       title="Delete"
                     >
-                      ×
+                      Ã—
                     </button>
                   </div>
                 </div>
@@ -278,7 +279,7 @@ export default function PortfolioPage() {
                         handleDeleteSymbol(sym.id)
                       }}
                     >
-                      ×
+                      Ã—
                     </button>
                   </div>
                   <div className={styles.symName}>{sym.name}</div>
@@ -292,7 +293,7 @@ export default function PortfolioPage() {
 
       <div className={styles.chartSection}>
         <div className={styles.chartHeader}>
-          <h2>📈 Chart: {selectedSymbol || 'Select Symbol'}</h2>
+          <h2>ðŸ“ˆ Chart: {selectedSymbol || 'Select Symbol'}</h2>
         </div>
 
         <div className={styles.chartContainerLarge}>
@@ -311,7 +312,7 @@ export default function PortfolioPage() {
           <div className={styles.modalContent}>
             <div className={styles.modalHeader}>
               <h3>Create New Watchlist</h3>
-              <button className={styles.closeBtn} onClick={() => setShowCategoryModal(false)}>×</button>
+              <button className={styles.closeBtn} onClick={() => setShowCategoryModal(false)}>Ã—</button>
             </div>
             <div className={styles.modalBody}>
               <div className={styles.formGroup}>
@@ -336,7 +337,7 @@ export default function PortfolioPage() {
               <div className={styles.formGroup}>
                 <label>Icon</label>
                 <div className={styles.iconPicker}>
-                  {['📈', '💱', '🪙', '📊', '🔥', '⭐', '💎', '🚀'].map((icon) => (
+                  {['ðŸ“ˆ', 'ðŸ’±', 'ðŸª™', 'ðŸ“Š', 'ðŸ”¥', 'â­', 'ðŸ’Ž', 'ðŸš€'].map((icon) => (
                     <button
                       key={icon}
                       className={`${styles.iconBtn} ${newCatIcon === icon ? styles.selected : ''}`}
@@ -365,7 +366,7 @@ export default function PortfolioPage() {
           <div className={styles.modalContent}>
             <div className={styles.modalHeader}>
               <h3>Edit Watchlist</h3>
-              <button className={styles.closeBtn} onClick={() => setShowEditModal(false)}>×</button>
+              <button className={styles.closeBtn} onClick={() => setShowEditModal(false)}>Ã—</button>
             </div>
             <div className={styles.modalBody}>
               <div className={styles.formGroup}>
@@ -388,7 +389,7 @@ export default function PortfolioPage() {
               <div className={styles.formGroup}>
                 <label>Icon</label>
                 <div className={styles.iconPicker}>
-                  {['📈', '💱', '🪙', '📊', '🔥', '⭐', '💎', '🚀'].map((icon) => (
+                  {['ðŸ“ˆ', 'ðŸ’±', 'ðŸª™', 'ðŸ“Š', 'ðŸ”¥', 'â­', 'ðŸ’Ž', 'ðŸš€'].map((icon) => (
                     <button
                       key={icon}
                       className={`${styles.iconBtn} ${newCatIcon === icon ? styles.selected : ''}`}
@@ -417,7 +418,7 @@ export default function PortfolioPage() {
           <div className={styles.modalContent}>
             <div className={styles.modalHeader}>
               <h3>Add Symbol</h3>
-              <button className={styles.closeBtn} onClick={() => setShowSymbolModal(false)}>×</button>
+              <button className={styles.closeBtn} onClick={() => setShowSymbolModal(false)}>Ã—</button>
             </div>
             <div className={styles.modalBody}>
               <div className={styles.formGroup}>
@@ -492,7 +493,7 @@ function TradingViewChart({ symbol }: { symbol: string }) {
             allow_symbol_change: true,
           })
         } catch (error) {
-          console.error('TradingView widget error:', error)
+          logger.error('TradingView widget error:', error)
         }
       }
     }

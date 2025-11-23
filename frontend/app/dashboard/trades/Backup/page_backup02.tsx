@@ -1,8 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import { ordersAPI, Order, OrderCreateData } from '@/services/api/orders'
 import styles from './trades.module.css'
+import logger from '../../../utils/logger'
 
 export default function TradesPage() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -27,7 +28,7 @@ export default function TradesPage() {
       setOrders(data.orders)
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching orders:', error)
+      logger.error('Error fetching orders:', error)
       setLoading(false)
     }
   }
