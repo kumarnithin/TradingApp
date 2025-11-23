@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import axios from 'axios'
 import styles from './lit.module.css'
 import logger from '../../../utils/logger'
@@ -20,15 +20,15 @@ import AlertsPanel from './components/AlertsPanel'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface LITMetrics {
-  orderFlow: any
-  spoofing: any
-  accumulation: any
-  iceberg: any
-  microstructure: any
-  darkPool: any
-  liquidity: any
-  prediction: any
-  execution: any
+  orderFlow: unknown
+  spoofing: unknown
+  accumulation: unknown
+  iceberg: unknown
+  microstructure: unknown
+  darkPool: unknown
+  liquidity: unknown
+  prediction: unknown
+  execution: unknown
 }
 
 export default function LITPage() {
@@ -36,19 +36,13 @@ export default function LITPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [litMetrics, setLitMetrics] = useState<LITMetrics | null>(null)
   const [loading, setLoading] = useState(true)
-  const [alerts, setAlerts] = useState<any[]>([
+  const [alerts, setAlerts] = useState<unknown[]>([
     { type: 'SPOOFING', message: 'Potential spoofing detected at $150.25', confidence: 85, time: '13:45' },
     { type: 'ACCUMULATION', message: 'Institutional accumulation phase detected', confidence: 78, time: '13:40' },
     { type: 'ICEBERG', message: 'Hidden iceberg order detected: ~50K shares', confidence: 92, time: '13:35' }
   ])
 
-  useEffect(() => {
-    fetchLITData()
-    const interval = setInterval(fetchLITData, 1000) // Update every second
-    return () => clearInterval(interval)
-  }, [selectedSymbol])
-
-  const fetchLITData = async () => {
+  const fetchLITData = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/api/v1/lit/metrics/${selectedSymbol}`)
       setLitMetrics(response.data)
@@ -144,7 +138,17 @@ export default function LITPage() {
       })
       setLoading(false)
     }
-  }
+  }, [selectedSymbol])
+
+  useEffect(() => {
+    let mounted = true
+    const run = async () => {
+      await fetchLITData()
+    }
+    run()
+    const interval = setInterval(() => { if (mounted) run() }, 1000)
+    return () => { mounted = false; clearInterval(interval) }
+  }, [fetchLITData])
 
   const clearAlerts = () => {
     setAlerts([])

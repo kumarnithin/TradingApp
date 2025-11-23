@@ -2,12 +2,12 @@
 
 interface OrderFlowProps {
   symbol: string
-  data?: any
+  data?: unknown
   fullscreen?: boolean
 }
 
-export default function OrderFlowDashboard({ symbol, data, fullscreen }: OrderFlowProps) {
-  const mockData = data || {
+export default function OrderFlowDashboard(_props: OrderFlowProps) {
+  const defaultMock = {
     bidVolume: 125000,
     askVolume: 98000,
     bidAskRatio: 1.27,
@@ -16,7 +16,9 @@ export default function OrderFlowDashboard({ symbol, data, fullscreen }: OrderFl
     vwap: 150.25,
     orderBookImbalance: 0.65,
     liquidityScore: 78
-  }
+  } as const
+
+  const mockData = (_props.data ?? defaultMock) as typeof defaultMock
 
   return (
     <div style={{ padding: '20px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(138,180,248,0.1)' }}>

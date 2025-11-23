@@ -105,6 +105,11 @@ interface Signal {
   partialTP?: Array<{ level: number; price: number; quantity: number }>
 }
 
+interface Asset {
+  symbol: string
+  name: string
+}
+
 export default function GeneratorPage() {
   const [assetClass, setAssetClass] = useState('STOCKS')
   const [selectedAsset, setSelectedAsset] = useState(ASSETS.STOCKS)
@@ -121,7 +126,7 @@ export default function GeneratorPage() {
     timeframe: '4h'
   })
   const [jsonPreview, setJsonPreview] = useState('')
-  const [history, setHistory] = useState<any[]>([])
+  const [history, setHistory] = useState<unknown[]>([])
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Update JSON preview whenever signal changes
@@ -155,7 +160,7 @@ export default function GeneratorPage() {
     })
   }
 
-  const handleAssetSelect = (asset: any) => {
+  const handleAssetSelect = (asset: Asset) => {
     setSelectedAsset(asset)
     updateJsonPreview({
       ...signal,
@@ -180,12 +185,13 @@ export default function GeneratorPage() {
 
   const handleSendTest = async () => {
     try {
-      const response = await axios.post(`${API_URL}/api/v1/webhook/test`, JSON.parse(jsonPreview))
+      await axios.post(`${API_URL}/api/v1/webhook/test`, JSON.parse(jsonPreview))
       addToHistory('success', `Test signal sent: ${signal.symbol} ${signal.action}`)
       alert('Test signal sent successfully!')
-    } catch (error: any) {
-      addToHistory('error', `Failed to send test signal: ${error.message}`)
-      alert(`Error: ${error.message}`)
+    } catch (err) {
+      const e = err as { message?: string }
+      addToHistory('error', `Failed to send test signal: ${e?.message || 'Unknown error'}`)
+      alert(`Error: ${e?.message || 'Unknown error'}`)
     }
   }
 
@@ -194,8 +200,9 @@ export default function GeneratorPage() {
       const response = await axios.post(`${API_URL}/api/v1/backtest`, JSON.parse(jsonPreview))
       addToHistory('info', `Backtest completed for ${signal.symbol}`)
       alert(`Backtest Result: ${JSON.stringify(response.data, null, 2)}`)
-    } catch (error: any) {
-      alert(`Backtest Error: ${error.message}`)
+    } catch (err) {
+      const e = err as { message?: string }
+      alert(`Backtest Error: ${e?.message || 'Unknown error'}`)
     }
   }
 
@@ -316,7 +323,7 @@ export default function GeneratorPage() {
                 <label>Action</label>
                 <select 
                   value={signal.action}
-                  onChange={(e) => updateJsonPreview({...signal, action: e.target.value as any})}
+                  onChange={(e) => updateJsonPreview({...signal, action: e.target.value as unknown})}
                   className={styles.select}
                 >
                   <option>BUY</option>
@@ -339,7 +346,7 @@ export default function GeneratorPage() {
                 <label>Order Type</label>
                 <select 
                   value={signal.orderType}
-                  onChange={(e) => updateJsonPreview({...signal, orderType: e.target.value as any})}
+                  onChange={(e) => updateJsonPreview({...signal, orderType: e.target.value as unknown})}
                   className={styles.select}
                 >
                   <option>MARKET</option>
@@ -412,7 +419,7 @@ export default function GeneratorPage() {
                 <label>Priority</label>
                 <select 
                   value={signal.priority}
-                  onChange={(e) => updateJsonPreview({...signal, priority: e.target.value as any})}
+                  onChange={(e) => updateJsonPreview({...signal, priority: e.target.value as unknown})}
                   className={styles.select}
                 >
                   <option>LOW</option>

@@ -2,11 +2,10 @@
 
 interface PredictionProps {
   symbol: string
-  data?: any
-}
+  data?: unknown}
 
-export default function OrderFlowPrediction({ symbol, data }: PredictionProps) {
-  const mockData = data || {
+export default function OrderFlowPrediction(_props: PredictionProps) {
+  const defaultMock = {
     nextMoveDirection: 'UP',
     confidence: 78,
     expectedMagnitude: 1.25,
@@ -16,7 +15,9 @@ export default function OrderFlowPrediction({ symbol, data }: PredictionProps) {
     orderFlowImbalance: 0.72,
     predictedVolumeSpike: true,
     estimatedSpike: 2300000
-  }
+  } as const
+
+  const mockData = (_props.data ?? defaultMock) as typeof defaultMock
 
   return (
     <div style={{ padding: '24px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(138,180,248,0.1)' }}>

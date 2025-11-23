@@ -15,20 +15,20 @@ export default function AdvancedToolsPage() {
   const [optAvgL, setOptAvgL] = useState('500')
   const [optTrades, setOptTrades] = useState('50')
   const [optPf, setOptPf] = useState('1.3')
-  const [optResult, setOptResult] = useState<any>(null)
+  const [optResult, setOptResult] = useState<unknown>(null)
   
   // Calendar State
-  const [calendarResult, setCalendarResult] = useState<any>(null)
+  const [calendarResult, setCalendarResult] = useState<unknown>(null)
   
   // Correlation State
   const [corrSymbols, setCorrSymbols] = useState('EUR/USD,GBP/USD,USD/JPY')
-  const [corrResult, setCorrResult] = useState<any>(null)
+  const [corrResult, setCorrResult] = useState<unknown>(null)
   
   // Volatility State
-  const [volResult, setVolResult] = useState<any>(null)
+  const [volResult, setVolResult] = useState<unknown>(null)
   
   // Sessions State
-  const [sessionsResult, setSessionsResult] = useState<any>(null)
+  const [sessionsResult, setSessionsResult] = useState<unknown>(null)
 
   const optimizeStrategy = async () => {
     try {
@@ -105,7 +105,7 @@ export default function AdvancedToolsPage() {
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as unknown)}
             style={{
               padding: '10px 16px',
               background: activeTab === tab.id ? '#3b82f6' : 'transparent',
@@ -161,7 +161,7 @@ export default function AdvancedToolsPage() {
                   <p><strong>Summary:</strong> {optResult.summary}</p>
                   <p><strong>Priority Areas:</strong> {optResult.priority_areas.join(', ')}</p>
                   <p><strong>Expected Improvement:</strong> +{optResult.expected_improvement}%</p>
-                  {optResult.suggestions.slice(0, 3).map((sugg: any, idx: number) => (
+                  {optResult.suggestions.slice(0, 3).map((sugg: unknown, idx: number) => (
                     <div key={idx} style={{ marginTop: '12px', padding: '10px', background: '#1e293b', borderRadius: '6px', borderLeft: '3px solid #3b82f6' }}>
                       <p><strong>{sugg.area}</strong> ({sugg.priority})</p>
                       <p>Current: {sugg.current} → Target: {sugg.target}</p>
@@ -184,7 +184,7 @@ export default function AdvancedToolsPage() {
 
             {calendarResult && (
               <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '16px', maxHeight: '400px', overflowY: 'auto' }}>
-                {calendarResult.events.slice(0, 5).map((event: any, idx: number) => (
+                {calendarResult.events.slice(0, 5).map((event: unknown, idx: number) => (
                   <div key={idx} style={{ padding: '12px', borderBottom: idx < 4 ? '1px solid #334155' : 'none', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{event.event}</span>

@@ -50,14 +50,9 @@ export default function RiskPage() {
   const [calculatedSize, setCalculatedSize] = useState(0)
   const [positions, setPositions] = useState<Position[]>([])
   const [loading, setLoading] = useState(true)
-  const [alerts, setAlerts] = useState<any[]>([])
+  const [alerts, setAlerts] = useState<unknown[]>([])
 
-  useEffect(() => {
-    fetchRiskData()
-    generateAlerts()
-  }, [])
-
-  const fetchRiskData = async () => {
+  async function fetchRiskData() {
     try {
       const [metricsRes, positionsRes] = await Promise.all([
         axios.get(`${API_URL}/api/v1/risk/metrics`),
@@ -72,6 +67,52 @@ export default function RiskPage() {
     }
   }
 
+  function generateAlerts() {
+    const newAlerts: unknown[] = []
+
+    if (metrics.dailyLoss < metrics.dailyLossLimit) {
+      newAlerts.push({
+        type: 'error',
+        title: 'Daily Loss Limit',
+        message: `Daily loss of $${Math.abs(metrics.dailyLoss)} exceeded limit of $${Math.abs(metrics.dailyLossLimit)}`
+      })
+    }
+
+    if (metrics.marginUsed > 80) {
+      newAlerts.push({
+        type: 'warning',
+        title: 'High Margin Usage',
+        message: `Margin usage at ${metrics.marginUsed}%. Recommended max: 50%`
+      })
+    }
+
+    if (metrics.openPositions >= metrics.maxOpenPositions) {
+      newAlerts.push({
+        type: 'warning',
+        title: 'Max Positions Reached',
+        message: `${metrics.openPositions} open positions. No new trades recommended.`
+      })
+    }
+
+    if (metrics.maxDrawdown < metrics.maxDrawdownLimit) {
+      newAlerts.push({
+        type: 'error',
+        title: 'Max Drawdown Exceeded',
+        message: `Current drawdown ${metrics.maxDrawdown}% exceeds limit ${metrics.maxDrawdownLimit}%`
+      })
+    }
+
+    setAlerts(newAlerts)
+  }
+
+  useEffect(() => {
+    const run = async () => {
+      await fetchRiskData()
+      generateAlerts()
+    }
+    run()
+  }, [])
+
   const calculatePositionSize = () => {
     // Formula: Position Size = (Risk % * Account Balance) / (Stop Loss % * Entry Price)
     const riskAmount = (riskRatio / 100) * metrics.accountBalance
@@ -80,8 +121,8 @@ export default function RiskPage() {
     setCalculatedSize(size)
   }
 
-  const generateAlerts = () => {
-    const newAlerts: any[] = []
+  function generateAlerts() {
+    const newAlerts: unknown[] = []
 
     if (metrics.dailyLoss < metrics.dailyLossLimit) {
       newAlerts.push({
@@ -369,7 +410,15 @@ export default function RiskPage() {
 }
 
 // Risk Card Component
-function RiskCard({ title, value, percent, limit, icon, status }: any) {
+type RiskCardProps = {
+  title: string
+  value: string
+  percent: string | number
+  limit: string | number
+  icon: string
+  status: string
+}
+function RiskCard({ title, value, percent, limit, icon, status }: RiskCardProps) {
   return (
     <div className={`${styles.riskCard} glass-light`}>
       <div className={styles.cardTop}>
@@ -393,7 +442,13 @@ function RiskCard({ title, value, percent, limit, icon, status }: any) {
 }
 
 // Risk Gauge Component
-function RiskGauge({ title, current, limit, unit }: any) {
+type RiskGaugeProps = {
+  title: string
+  current: number
+  limit: number
+  unit: string
+}
+function RiskGauge({ title, current, limit, unit }: RiskGaugeProps) {
   const percent = (current / limit) * 100
   const status = percent > 80 ? 'danger' : percent > 50 ? 'warning' : 'good'
 

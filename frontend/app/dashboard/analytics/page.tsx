@@ -1,13 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 export default function AnalyticsPage() {
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    setLoading(false)
-  }, [])
+  const _loading = false
 
   // Mock data
   const accounts = [

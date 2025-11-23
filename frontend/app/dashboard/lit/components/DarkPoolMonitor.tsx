@@ -2,20 +2,22 @@
 
 interface DarkPoolProps {
   symbol: string
-  data?: any
-  fullscreen?: boolean
+    data?: unknown
+    fullscreen?: boolean
 }
 
-export default function DarkPoolMonitor({ symbol, data, fullscreen }: DarkPoolProps) {
-  const mockData = data || {
+export default function DarkPoolMonitor(_props: DarkPoolProps) {
+  const defaultMock = {
     darkPoolVolume: 450000,
     darkPoolBuyVolume: 275000,
     darkPoolSellVolume: 175000,
-    darkPoolVwap: 150.30,
+    darkPoolVwap: 150.3,
     volumePctDarkpool: 22,
     executedAtPremium: 0.08,
     blockTradesDetected: 3
-  }
+  } as const
+
+  const mockData = (_props.data ?? defaultMock) as typeof defaultMock
 
   return (
     <div style={{ padding: '20px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(138,180,248,0.1)' }}>

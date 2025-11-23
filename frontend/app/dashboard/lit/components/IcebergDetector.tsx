@@ -2,23 +2,33 @@
 
 interface IcebergProps {
   symbol: string
-  data?: any
+  data?: unknown
   fullscreen?: boolean
 }
 
-export default function IcebergDetector({ symbol, data, fullscreen }: IcebergProps) {
-  const mockData = data || {
+interface DetectedOrder {
+  id: number
+  price: number
+  visible: number
+  estimated: number
+  refreshRate: number
+}
+
+export default function IcebergDetector(_props: IcebergProps) {
+  const defaultMock = {
     icebergsDetected: 4,
     totalHiddenQuantity: 250000,
     visibleLiquidity: 85000,
     estimatedTotalSize: 335000,
     detectedOrders: [
       { id: 1, price: 150.25, visible: 10000, estimated: 50000, refreshRate: 250 },
-      { id: 2, price: 150.50, visible: 20000, estimated: 75000, refreshRate: 300 },
+      { id: 2, price: 150.5, visible: 20000, estimated: 75000, refreshRate: 300 },
       { id: 3, price: 150.75, visible: 15000, estimated: 60000, refreshRate: 280 },
-      { id: 4, price: 151.00, visible: 40000, estimated: 150000, refreshRate: 400 }
+      { id: 4, price: 151.0, visible: 40000, estimated: 150000, refreshRate: 400 }
     ]
-  }
+  } as const
+
+  const mockData = (_props.data ?? defaultMock) as typeof defaultMock
 
   return (
     <div style={{ padding: '20px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(138,180,248,0.1)' }}>
@@ -48,7 +58,7 @@ export default function IcebergDetector({ symbol, data, fullscreen }: IcebergPro
       <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: '600' }}>
         Detected Icebergs
       </div>
-      {mockData.detectedOrders.map((order: any, idx: number) => (
+      {mockData.detectedOrders.map((order: DetectedOrder, idx: number) => (
         <div key={idx} style={{ padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', marginBottom: '6px', fontSize: '11px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
             <span style={{ color: '#8AB4F8', fontWeight: '700' }}>${order.price.toFixed(2)}</span>

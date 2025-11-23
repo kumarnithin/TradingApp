@@ -120,7 +120,7 @@ export default function TradingDisciplinePage() {
         questions: JSON.stringify(questions)
       })
 
-      const response = await axios.post(
+      await axios.post(
         `${API_URL}/api/v1/trading-discipline/templates/save?${params.toString()}`
       )
 
@@ -136,9 +136,10 @@ export default function TradingDisciplinePage() {
         setActiveTab('templates')
         setSuccess('')
       }, 1500)
-    } catch (err: any) {
-      logger.error('Error:', err)
-      setError(err.response?.data?.detail || 'Failed to create template')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      logger.error('Error:', e)
+      setError(e.response?.data?.detail || e.message || 'Failed to create template')
     } finally {
       setLoading(false)
     }
@@ -179,9 +180,10 @@ export default function TradingDisciplinePage() {
       setTimeout(() => fetchAnalytics(), 500)
       
       setTimeout(() => setSuccess(''), 3000)
-    } catch (err: any) {
-      logger.error('Error:', err)
-      setError(err.response?.data?.detail || 'Failed to validate trade')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      logger.error('Error:', e)
+      setError(e.response?.data?.detail || e.message || 'Failed to validate trade')
     } finally {
       setLoading(false)
     }
@@ -232,7 +234,7 @@ export default function TradingDisciplinePage() {
             key={tab}
             onClick={() => {
               setError('')
-              setActiveTab(tab as any)
+              setActiveTab(tab as unknown)
             }}
             style={{
               padding: '12px 24px',

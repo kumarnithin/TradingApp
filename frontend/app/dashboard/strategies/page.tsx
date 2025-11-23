@@ -15,7 +15,7 @@ interface Strategy {
   status: 'ACTIVE' | 'PAUSED' | 'STOPPED'
   allocation: number // % of portfolio
   symbols: string[]
-  parameters: Record<string, any>
+  parameters: Record<string, unknown>
   metrics: {
     pnl: number
     winRate: number
@@ -80,15 +80,11 @@ export default function StrategiesPage() {
     description: '',
     type: '',
     allocation: 10,
-    symbols: '' as any,
+    symbols: '' as string,
     parameters: {}
   })
 
-  useEffect(() => {
-    fetchStrategies()
-  }, [])
-
-  const fetchStrategies = async () => {
+  async function fetchStrategies() {
     try {
       const response = await axios.get(`${API_URL}/api/v1/strategies`)
       setStrategies(response.data)
@@ -98,6 +94,13 @@ export default function StrategiesPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const run = async () => {
+      await fetchStrategies()
+    }
+    run()
+  }, [])
 
   const handleCreateStrategy = async () => {
     if (!formData.name || !formData.type) {
@@ -160,7 +163,8 @@ export default function StrategiesPage() {
     }
   }
 
-  const handleSelectTemplate = (template: typeof STRATEGY_TEMPLATES) => {
+  type StrategyTemplate = { name: string; description: string; type: string; icon?: string }
+  const handleSelectTemplate = (template: StrategyTemplate) => {
     setSelectedTemplate(template.type)
     setFormData({
       ...formData,

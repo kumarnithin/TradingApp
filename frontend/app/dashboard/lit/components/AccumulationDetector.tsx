@@ -2,23 +2,25 @@
 
 interface AccumulationProps {
   symbol: string
-  data?: any
+  data?: unknown
   fullscreen?: boolean
 }
 
-export default function AccumulationDetector({ symbol, data, fullscreen }: AccumulationProps) {
-  const mockData = data || {
+export default function AccumulationDetector(_props: AccumulationProps) {
+  const defaultMock = {
     phase: 'ACCUMULATION',
     confidence: 78,
     institutionalBuyVolume: 450000,
     institutionalSellVolume: 120000,
     volumeInPhase: 1200000,
     priceChange: 2.35,
-    estimatedTargetPrice: 155.50,
+    estimatedTargetPrice: 155.5,
     whaleMovementsDetected: 3
-  }
+  } as const
 
-  const phaseColor: any = {
+  const mockData = (_props.data ?? defaultMock) as typeof defaultMock
+
+  const phaseColor: unknown= {
     ACCUMULATION: '#22c55e',
     DISTRIBUTION: '#ef4444',
     MARKUP: '#06b6d4',

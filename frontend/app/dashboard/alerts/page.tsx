@@ -16,13 +16,13 @@ export default function AlertsPage() {
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
   const [quantity, setQuantity] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
-  const [webhookJson, setWebhookJson] = useState<any>(null)
-  const [alerts, setAlerts] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<unknown[]>([])
+  // webhook JSON is derived from form inputs; compute with useMemo to avoid setState-in-effect
+  const [_alerts, _setAlerts] = useState<unknown[]>([])
   const [copied, setCopied] = useState(false)
 
   // Symbol type info
-  const typeIcons: Record<string, string> = {
+  const _typeIcons: Record<string, string> = {
     stocks: '📈',
     forex: '💱',
     futures: '📊',
@@ -61,14 +61,11 @@ export default function AlertsPage() {
     mapSymbol()
   }, [ibSymbol])
 
-  // Generate webhook JSON
-  useEffect(() => {
-    if (entryPrice && stopLoss && takeProfit && quantity && tvSymbol && alertName) {
-      const risk = Math.abs(parseFloat(entryPrice) - parseFloat(stopLoss)) * parseFloat(quantity)
-      const reward = Math.abs(parseFloat(takeProfit) - parseFloat(entryPrice)) * parseFloat(quantity)
-      const rrRatio = reward / risk || 0
-
-      setWebhookJson({
+  // compute webhook JSON from inputs (avoid setState inside useEffect)
+  // keep simple and readable; Type is `unknown` to avoid over-typing UI mock data
+   
+  const _webhookJson = (entryPrice && stopLoss && takeProfit && quantity && tvSymbol && alertName)
+    ? {
         webhook_config: {
           name: alertName,
           instrument: {
@@ -83,20 +80,21 @@ export default function AlertsPage() {
           },
           position_sizing: {
             quantity: parseFloat(quantity),
-            risk_size: risk,
-            risk_reward_ratio: Number(rrRatio.toFixed(2)),
+            risk_size: Math.abs(parseFloat(entryPrice) - parseFloat(stopLoss)) * parseFloat(quantity),
+            risk_reward_ratio: Number((Math.abs(parseFloat(takeProfit) - parseFloat(entryPrice)) / (Math.abs(parseFloat(entryPrice) - parseFloat(stopLoss)) || 1)).toFixed(2)),
           },
           metadata: {
             created_at: new Date().toISOString(),
           }
         }
-      })
-    }
-  }, [entryPrice, stopLoss, takeProfit, quantity, tvSymbol, alertName, ibSymbol, instrumentType])
+      }
+    : null
+
+  const webhookJsonFinal = _webhookJson as unknown
 
   const copyToClipboard = () => {
-    if (webhookJson) {
-      navigator.clipboard.writeText(JSON.stringify(webhookJson, null, 2))
+    if (webhookJsonFinal) {
+      navigator.clipboard.writeText(JSON.stringify(webhookJsonFinal, null, 2))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }

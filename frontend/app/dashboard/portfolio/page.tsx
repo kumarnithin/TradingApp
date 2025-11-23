@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useId } from 'react'
 import axios from 'axios'
 import logger from '../../../utils/logger'
 
@@ -45,11 +45,19 @@ export default function PortfolioPage() {
   const [autoUpdate, setAutoUpdate] = useState(false)
 
   useEffect(() => {
-    fetchCategories()
+    const run = async () => {
+      await fetchCategories()
+    }
+    run()
   }, [])
 
   useEffect(() => {
-    if (activeCategory) fetchSymbols(activeCategory)
+    if (activeCategory) {
+      const run = async () => {
+        await fetchSymbols(activeCategory)
+      }
+      run()
+    }
   }, [activeCategory])
 
   useEffect(() => {
@@ -58,6 +66,32 @@ export default function PortfolioPage() {
       query ? symbols.filter(s => s.symbol.toLowerCase().includes(query) || s.name.toLowerCase().includes(query)) : symbols
     )
   }, [searchQuery, symbols])
+
+  // hoisted fetchers
+  async function fetchCategories() {
+    try {
+      const res = await axios.get(`${API_URL}/api/v1/portfolio/categories`)
+      setCategories(res.data.categories || [])
+      if (res.data.categories.length > 0 && !activeCategory) {
+        setActiveCategory(res.data.categories[0].id)
+      }
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string }
+      logger.error('Error fetching categories:', err)
+    }
+  }
+
+  async function fetchSymbols(categoryId: string) {
+    try {
+      const res = await axios.get(`${API_URL}/api/v1/portfolio/categories/${categoryId}/symbols-with-prices`)
+      setSymbols(res.data.symbols || [])
+      setFilteredSymbols(res.data.symbols || [])
+      setSearchQuery('')
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string }
+      logger.error('Error fetching symbols:', err)
+    }
+  }
 
   // Real-time price updates - every 10 seconds
   useEffect(() => {
@@ -123,7 +157,7 @@ export default function PortfolioPage() {
     }
   }
 
-  const handleImportCSV = async (event: any) => {
+  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file || !activeCategory) {
       alert('Select a watchlist and CSV file')
@@ -141,8 +175,9 @@ export default function PortfolioPage() {
       
       alert(`Imported ${res.data.added} symbols, skipped ${res.data.skipped}`)
       await fetchSymbols(activeCategory)
-    } catch (e) {
-      alert('Failed to import CSV')
+    } catch (err) {
+      const error = err as { response?: { data?: { detail?: string } }; message?: string }
+      alert(error.response?.data?.detail || error.message || 'Failed to import CSV')
     }
     
     event.target.value = ''
@@ -161,8 +196,9 @@ export default function PortfolioPage() {
       setNewCatIcon('STOCK')
       setShowCategoryModal(false)
       await fetchCategories()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Failed')
+    } catch (err) {
+      const error = err as { response?: { data?: { detail?: string } }; message?: string }
+      alert(error.response?.data?.detail || error.message || 'Failed')
     }
   }
 
@@ -177,8 +213,9 @@ export default function PortfolioPage() {
       setEditingCategory(null)
       setShowEditModal(false)
       await fetchCategories()
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Failed')
+    } catch (e) {
+      const error = e as { response?: { data?: { detail?: string } }; message?: string }
+      alert(error.response?.data?.detail || error.message || 'Failed')
     }
   }
 
@@ -188,8 +225,9 @@ export default function PortfolioPage() {
       await axios.delete(`${API_URL}/api/v1/portfolio/categories/${id}`)
       await fetchCategories()
       setActiveCategory(null)
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Failed')
+    } catch (e) {
+      const error = e as { response?: { data?: { detail?: string } }; message?: string }
+      alert(error.response?.data?.detail || error.message || 'Failed')
     }
   }
 
@@ -204,8 +242,9 @@ export default function PortfolioPage() {
       setNewSymbolName('')
       setShowSymbolModal(false)
       await fetchSymbols(activeCategory)
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Failed')
+    } catch (e) {
+      const error = e as { response?: { data?: { detail?: string } }; message?: string }
+      alert(error.response?.data?.detail || error.message || 'Failed')
     }
   }
 
@@ -214,8 +253,9 @@ export default function PortfolioPage() {
     try {
       await axios.delete(`${API_URL}/api/v1/portfolio/symbols/${symbolId}`)
       if (activeCategory) await fetchSymbols(activeCategory)
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Failed')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      alert(e.response?.data?.detail || e.message || 'Failed')
     }
   }
 
@@ -511,7 +551,16 @@ export default function PortfolioPage() {
   )
 }
 
-function CategoryModal({ onClose, onCreate, catName, setCatName, catDesc, setCatDesc }: any) {
+type CategoryModalProps = {
+  onClose: () => void
+  onCreate: () => void
+  catName: string
+  setCatName: (v: string) => void
+  catDesc: string
+  setCatDesc: (v: string) => void
+}
+
+function CategoryModal({ onClose, onCreate, catName, setCatName, catDesc, setCatDesc }: CategoryModalProps) {
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', width: '90%', maxWidth: '400px', padding: '20px' }}>
@@ -527,7 +576,16 @@ function CategoryModal({ onClose, onCreate, catName, setCatName, catDesc, setCat
   )
 }
 
-function EditModal({ onClose, onSave, catName, setCatName, catDesc, setCatDesc }: any) {
+type EditModalProps = {
+  onClose: () => void
+  onSave: () => void
+  catName: string
+  setCatName: (v: string) => void
+  catDesc: string
+  setCatDesc: (v: string) => void
+}
+
+function EditModal({ onClose, onSave, catName, setCatName, catDesc, setCatDesc }: EditModalProps) {
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', width: '90%', maxWidth: '400px', padding: '20px' }}>
@@ -543,7 +601,16 @@ function EditModal({ onClose, onSave, catName, setCatName, catDesc, setCatDesc }
   )
 }
 
-function SymbolModal({ onClose, onAdd, symbol, setSymbol, symbolName, setSymbolName }: any) {
+type SymbolModalProps = {
+  onClose: () => void
+  onAdd: () => void
+  symbol: string
+  setSymbol: (v: string) => void
+  symbolName: string
+  setSymbolName: (v: string) => void
+}
+
+function SymbolModal({ onClose, onAdd, symbol, setSymbol, symbolName, setSymbolName }: SymbolModalProps) {
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', width: '90%', maxWidth: '400px', padding: '20px' }}>
@@ -560,7 +627,8 @@ function SymbolModal({ onClose, onAdd, symbol, setSymbol, symbolName, setSymbolN
 }
 
 function TradingViewChart({ symbol }: { symbol: string }) {
-  const containerId = `tv_${symbol}_${Date.now()}`
+  const id = useId()
+  const containerId = `tv_${symbol}_${id}`
 
   useEffect(() => {
     const container = document.getElementById(containerId)
@@ -607,6 +675,5 @@ function TradingViewChart({ symbol }: { symbol: string }) {
 
 declare global {
   interface Window {
-    TradingView: any
-  }
+    TradingView: unknown  }
 }

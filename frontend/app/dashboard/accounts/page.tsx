@@ -38,9 +38,16 @@ export default function AccountsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
 
   // Form state for both create and edit
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    account_name: string
+    account_type: 'demo' | 'live'
+    ib_account_number: string
+    broker_name: string
+    account_balance: string
+    currency: string
+  }>({
     account_name: '',
-    account_type: 'demo' as const,
+    account_type: 'demo',
     ib_account_number: '',
     broker_name: 'Interactive Brokers',
     account_balance: '',
@@ -75,12 +82,16 @@ export default function AccountsPage() {
       } else {
         // Fallback: if /current doesn't report a connected embedded account,
         // check the accounts list for any account flagged `is_ib_connected`.
-        try {
+          try {
           const listRes = await axios.get(`${API_URL}/api/v1/accounts/list`)
-          const ibConnected = (listRes.data.accounts || []).find((a: any) => a.is_ib_connected)
-          if (ibConnected) setConnectedAccount(ibConnected)
+          const ibConnected = (listRes.data.accounts || []).find((a: unknown) => {
+            const obj = a as Record<string, unknown>
+            const typed = obj as { is_ib_connected?: boolean }
+            return !!typed.is_ib_connected
+          }) as unknown
+          if (ibConnected) setConnectedAccount(ibConnected as AccountData)
           else setConnectedAccount(null)
-        } catch (le) {
+          } catch (_le) {
           setConnectedAccount(null)
         }
       }
@@ -135,8 +146,9 @@ export default function AccountsPage() {
       })
       setActiveTab('view')
       await fetchAccounts()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to create account')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      setError(e.response?.data?.detail || e.message || 'Failed to create account')
     } finally {
       setFormSubmitting(false)
     }
@@ -186,8 +198,9 @@ export default function AccountsPage() {
       })
       setActiveTab('view')
       await fetchAccounts()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to update account')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      setError(e.response?.data?.detail || e.message || 'Failed to update account')
     } finally {
       setFormSubmitting(false)
     }
@@ -205,14 +218,15 @@ export default function AccountsPage() {
         router.push('/dashboard/accounts')
       }
       await fetchAccounts()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to delete account')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      setError(e.response?.data?.detail || e.message || 'Failed to delete account')
     }
   }
 
   // Get status badge (prefers explicit `is_ib_connected` flag, then fallback to connectedAccount)
   const getStatusBadge = (account: AccountData) => {
-    const isConnectedFlag = !!(account as any).is_ib_connected
+    const isConnectedFlag = !!((account as unknown as { is_ib_connected?: boolean }).is_ib_connected)
     const isConnectedNow = connectedAccount?.account_name === account.account_name
 
     if (isConnectedNow || isConnectedFlag) {
@@ -307,7 +321,7 @@ export default function AccountsPage() {
             <div style={{ display: 'grid', gap: '16px' }}>
               {filteredAccounts.map((account) => {
                 const statusBadge = getStatusBadge(account)
-                const isConnected = connectedAccount?.account_name === account.account_name || !!(account as any).is_ib_connected
+                // connection status computed inline; no local binding needed
 
                 return (
                   <div key={account.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '16px', alignItems: 'center' }}>
@@ -376,7 +390,7 @@ export default function AccountsPage() {
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Account Type *</label>
-              <select value={formData.account_type} onChange={(e) => setFormData({ ...formData, account_type: e.target.value as any })} style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }}>
+              <select value={formData.account_type} onChange={(e) => setFormData({ ...formData, account_type: e.target.value as 'demo' | 'live' })} style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '5px', color: '#fff', fontSize: '14px' }}>
                 <option value="demo">📊 Demo (Paper Trading)</option>
                 <option value="live">⚠️ Live (Real Money)</option>
               </select>

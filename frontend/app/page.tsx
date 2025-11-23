@@ -46,13 +46,7 @@ export default function Dashboard() {
   const [signals, setSignals] = useState<Signal[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 5000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       const [statsRes, tradesRes, signalsRes] = await Promise.all([
         axios.get(`${API_URL}/api/v1/account/stats`),
@@ -69,6 +63,17 @@ export default function Dashboard() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const run = async () => {
+      await fetchData()
+    }
+    run()
+    const interval = setInterval(() => {
+      run()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [])
 
   if (loading) {
     return (

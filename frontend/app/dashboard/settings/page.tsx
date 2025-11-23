@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import axios from 'axios'
 import logger from '../../../utils/logger'
 
@@ -26,6 +26,13 @@ interface ConnectionStatus {
   timestamp?: string
 }
 
+interface HistoryEntry {
+  id: number
+  type: 'info' | 'success' | 'warning' | 'error' | string
+  message: string
+  timestamp: string
+}
+
 export default function SettingsPage() {
   const [availableAccounts, setAvailableAccounts] = useState<IBAccount[]>([])
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(() => {
@@ -39,39 +46,19 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
   const [scanningAccounts, setScanningAccounts] = useState(false)
   const [selectedAccountType, setSelectedAccountType] = useState<'demo' | 'live'>('demo')
-  const [connectionHistory, setConnectionHistory] = useState<any[]>(() => {
+  const [connectionHistory, setConnectionHistory] = useState<HistoryEntry[]>(() => {
     try {
       const raw = typeof window !== 'undefined' ? localStorage.getItem('ib_connection_history') : null
-      return raw ? JSON.parse(raw) : []
+      return raw ? (JSON.parse(raw) as HistoryEntry[]) : []
     } catch (e) {
       return []
     }
   })
 
-  useEffect(() => {
-    checkConnectionStatus()
-    const interval = setInterval(checkConnectionStatus, 5000)
-    return () => clearInterval(interval)
-  }, [])
+  // ID counter for history entries to avoid impure Date.now() calls during render
+  const historyIdRef = useRef<number>(1)
 
-  // Persist connectionStatus whenever it changes
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') localStorage.setItem('ib_connection_status', JSON.stringify(connectionStatus))
-    } catch (e) {
-      // ignore storage errors
-    }
-  }, [connectionStatus])
-
-  // Persist connectionHistory whenever it changes
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') localStorage.setItem('ib_connection_history', JSON.stringify(connectionHistory))
-    } catch (e) {
-      // ignore
-    }
-  }, [connectionHistory])
-
+  // Check connection status (runs on mount and on interval)
   const checkConnectionStatus = async () => {
     try {
       const response = await axios.get(`${API_URL}/api/v1/ib/connection-status`)
@@ -101,6 +88,37 @@ export default function SettingsPage() {
     }
   }
 
+  useEffect(() => {
+    const run = async () => {
+      await checkConnectionStatus()
+    }
+    run()
+    const interval = setInterval(() => {
+      checkConnectionStatus()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Persist connectionStatus whenever it changes
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem('ib_connection_status', JSON.stringify(connectionStatus))
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [connectionStatus])
+
+  // Persist connectionHistory whenever it changes
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem('ib_connection_history', JSON.stringify(connectionHistory))
+    } catch (e) {
+      // ignore
+    }
+  }, [connectionHistory])
+
+  // (hoisted above)
+
   const scanAccounts = async () => {
     setScanningAccounts(true)
     addToHistory('info', `Scanning ${selectedAccountType.toUpperCase()} accounts...`)
@@ -117,8 +135,9 @@ export default function SettingsPage() {
         setAvailableAccounts([])
         addToHistory('warning', response.data.message || 'No accounts found')
       }
-    } catch (error: any) {
-      addToHistory('error', `Failed to scan accounts: ${error.response?.data?.detail || error.message}`)
+    } catch (error) {
+      const e = error as { response?: { data?: { detail?: string } }; message?: string }
+      addToHistory('error', `Failed to scan accounts: ${e?.response?.data?.detail || e?.message || 'Unknown error'}`)
       setAvailableAccounts([])
     }
     
@@ -150,8 +169,9 @@ export default function SettingsPage() {
       } else {
         addToHistory('error', `Failed to connect: ${response.data.error}`)
       }
-    } catch (error: any) {
-      addToHistory('error', `Connection failed: ${error.response?.data?.detail || error.message}`)
+    } catch (error) {
+      const e = error as { response?: { data?: { detail?: string } }; message?: string }
+      addToHistory('error', `Connection failed: ${e?.response?.data?.detail || e?.message || 'Unknown error'}`)
     }
     
     setLoading(false)
@@ -165,21 +185,23 @@ export default function SettingsPage() {
       await axios.post(`${API_URL}/api/v1/ib/disconnect`)
       setConnectionStatus({ connected: false })
       addToHistory('success', '✅ Disconnected successfully')
-    } catch (error: any) {
-      addToHistory('error', `Disconnection failed: ${error.message}`)
+    } catch (error) {
+      const e = error as { message?: string }
+      addToHistory('error', `Disconnection failed: ${e?.message || 'Unknown error'}`)
     }
     
     setLoading(false)
   }
 
   const addToHistory = (type: string, message: string) => {
+    const id = historyIdRef.current++
     const newEntry = {
-      id: Date.now(),
+      id,
       type,
       message,
       timestamp: new Date().toISOString()
     }
-      setConnectionHistory((prev) => [newEntry, ...prev.slice(0, 9)])
+    setConnectionHistory((prev) => [newEntry, ...prev.slice(0, 9)])
   }
 
   return (

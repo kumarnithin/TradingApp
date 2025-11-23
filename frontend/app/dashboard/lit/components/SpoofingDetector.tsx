@@ -2,12 +2,19 @@
 
 interface SpoofingProps {
   symbol: string
-  data?: any
+  data?: unknown
   fullscreen?: boolean
 }
 
-export default function SpoofingDetector({ symbol, data, fullscreen }: SpoofingProps) {
-  const mockData = data || {
+interface RecentAlert {
+  id: number
+  type: string
+  confidence: number
+  time: string
+}
+
+export default function SpoofingDetector(_props: SpoofingProps) {
+  const mockData = _props.data || {
     riskLevel: 45,
     suspiciousOrders: 8,
     layeringDetected: 2,
@@ -51,7 +58,7 @@ export default function SpoofingDetector({ symbol, data, fullscreen }: SpoofingP
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: '600' }}>
           Recent Alerts
         </div>
-        {mockData.recentAlerts.map((alert: any, idx: number) => (
+        {mockData.recentAlerts.map((alert: RecentAlert, idx: number) => (
           <div key={idx} style={{ padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', marginBottom: '6px', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: '#f97316' }}>{alert.type}</span>
             <span style={{ color: 'rgba(255,255,255,0.5)' }}>Conf: {alert.confidence}%</span>

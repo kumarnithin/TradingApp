@@ -2,10 +2,9 @@
 
 interface LiquidityProps {
   symbol: string
-  data?: any
-}
+  data?: unknown}
 
-export default function LiquidityHeatMap({ symbol, data }: LiquidityProps) {
+export default function LiquidityHeatMap() {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
   const liquidityData = [
     [25, 30, 45, 60, 75, 85, 90, 95, 92, 88, 82, 75, 72, 68, 65, 70, 78, 85, 80, 72, 60, 50, 38, 28],

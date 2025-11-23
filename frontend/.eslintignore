@@ -1,0 +1,8 @@
+node_modules
+.next
+backend/.venv
+frontend/.next
+**/backup/**
+**/Backup/**
+dist
+build

@@ -1,7 +1,7 @@
 'use client'
 
 interface AlertsPanelProps {
-  alerts: any[]
+  alerts: unknown[]
   onClear?: () => void
 }
 

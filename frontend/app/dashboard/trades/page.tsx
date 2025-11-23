@@ -30,6 +30,15 @@ interface Account {
   is_ib_connected?: boolean;
 }
 
+interface NewTrade {
+  symbol: string;
+  action: 'BUY' | 'SELL' | string;
+  entry_price: number;
+  quantity: number;
+  trade_type: string;
+  notes: string;
+}
+
 export default function TradesPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
@@ -39,7 +48,7 @@ export default function TradesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [symbolFilter, setSymbolFilter] = useState<string>('');
   const [showForm, setShowForm] = useState(false);
-  const [newTrade, setNewTrade] = useState({
+  const [newTrade, setNewTrade] = useState<NewTrade>({
     symbol: '',
     action: 'BUY',
     entry_price: 0,
@@ -49,8 +58,11 @@ export default function TradesPage() {
   });
 
   useEffect(() => {
-    logger.debug('🔄 [TradesPage] Component mounted - fetching accounts...');
-    fetchAccounts();
+    const run = async () => {
+      logger.debug('🔄 [TradesPage] Component mounted - fetching accounts...');
+      await fetchAccounts();
+    }
+    run()
   }, []);
 
   useEffect(() => {
@@ -60,7 +72,7 @@ export default function TradesPage() {
     }
   }, [selectedAccount]);
 
-  const fetchAccounts = async () => {
+  async function fetchAccounts() {
     try {
       setLoading(true);
       logger.debug('📡 [fetchAccounts] Calling: GET /api/v1/accounts/list');
@@ -82,17 +94,18 @@ export default function TradesPage() {
       logger.debug('✅ [fetchAccounts] Response:', result);
       
       if (result.accounts && Array.isArray(result.accounts)) {
-        logger.info(`✅ [fetchAccounts] ${result.accounts.length} accounts loaded`);
-        setAccounts(result.accounts);
+        const accountsList = result.accounts as Account[];
+        logger.info(`✅ [fetchAccounts] ${accountsList.length} accounts loaded`);
+        setAccounts(accountsList);
         setError('');
-        
-        if (result.accounts.length > 0) {
-          // Prefer an account flagged as IB-connected by the backend
-          const ibConnected = result.accounts.find((a: any) => a.is_ib_connected);
+
+        if (accountsList.length > 0) {
+          // Prefer an account explicitly flagged as IB-connected by the backend
+          const ibConnected = accountsList.find((a: Account) => a.is_ib_connected === true);
           if (ibConnected && ibConnected.id) {
             setSelectedAccount(ibConnected.id);
           } else {
-            setSelectedAccount(result.accounts[0].id);
+            setSelectedAccount(accountsList[0].id);
           }
         }
       }
@@ -105,7 +118,7 @@ export default function TradesPage() {
     }
   };
 
-  const fetchTrades = async (accountId: string) => {
+  async function fetchTrades(accountId: string) {
     if (!accountId) {
       setTrades([]);
       return;
@@ -168,9 +181,7 @@ export default function TradesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           account_id: selectedAccount,
-          ...newTrade,
-          entry_price: parseFloat(newTrade.entry_price as any),
-          quantity: parseFloat(newTrade.quantity as any)
+          ...newTrade
         })
       });
 

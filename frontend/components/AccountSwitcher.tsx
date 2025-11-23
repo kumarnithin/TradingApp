@@ -22,17 +22,8 @@ export default function AccountSwitcher() {
   const [loading, setLoading] = useState(true)
   const [showAllAccounts, setShowAllAccounts] = useState(false)
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
-
-  // Load accounts on mount
-  useEffect(() => {
-    loadAccounts()
-  }, [])
-
-  useEffect(() => {
-    loadCurrentFilter()
-  }, [accounts])
-
-  const loadAccounts = async () => {
+  // hoisted functions: load accounts and restore filter
+  async function loadAccounts() {
     try {
       const response = await axios.get(`${API_URL}/api/v1/accounts/list`)
       if (response.data?.accounts) {
@@ -45,7 +36,7 @@ export default function AccountSwitcher() {
     }
   }
 
-  const loadCurrentFilter = () => {
+  function loadCurrentFilter() {
     try {
       const savedShowAll = localStorage.getItem('showAllAccounts')
       const savedAccountId = localStorage.getItem('currentAccountId')
@@ -82,6 +73,21 @@ export default function AccountSwitcher() {
       console.error('Error loading filter:', error)
     }
   }
+
+  // Load accounts on mount
+  useEffect(() => {
+    const run = async () => {
+      await loadAccounts()
+    }
+    run()
+  }, [])
+
+  useEffect(() => {
+    const run = () => {
+      loadCurrentFilter()
+    }
+    run()
+  }, [accounts])
 
   const handleShowAllAccounts = () => {
     setCurrentAccount(null)

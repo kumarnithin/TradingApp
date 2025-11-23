@@ -15,25 +15,25 @@ export default function ToolsPage() {
   const [posEntry, setPosEntry] = useState('150.25')
   const [posSL, setPosSL] = useState('145.00')
   const [posType, setPosType] = useState('stocks')
-  const [posResult, setPosResult] = useState<any>(null)
+  const [posResult, setPosResult] = useState<unknown>(null)
   
   // Risk/Reward State
   const [rrEntry, setRrEntry] = useState('150.25')
   const [rrSL, setRrSL] = useState('145.00')
   const [rrTP, setRrTP] = useState('160.00')
   const [rrQty, setRrQty] = useState('100')
-  const [rrResult, setRrResult] = useState<any>(null)
+  const [rrResult, setRrResult] = useState<unknown>(null)
   
   // Drawdown State
   const [ddPeak, setDdPeak] = useState('125000')
   const [ddCurrent, setDdCurrent] = useState('115000')
-  const [ddResult, setDdResult] = useState<any>(null)
+  const [ddResult, setDdResult] = useState<unknown>(null)
   
   // Kelly State
   const [kellyWr, setKellyWr] = useState('55')
   const [kellyAvgW, setKellyAvgW] = useState('650')
   const [kellyAvgL, setKellyAvgL] = useState('500')
-  const [kellyResult, setKellyResult] = useState<any>(null)
+  const [kellyResult, setKellyResult] = useState<unknown>(null)
 
   const calculatePosition = async () => {
     try {
@@ -119,7 +119,7 @@ export default function ToolsPage() {
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as 'position' | 'riskReward' | 'drawdown' | 'kelly' | 'optimize' | 'calendar' | 'correlation' | 'volatility')}
             style={{
               padding: '10px 16px',
               background: activeTab === tab.id ? '#3b82f6' : 'transparent',

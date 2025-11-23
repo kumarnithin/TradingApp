@@ -2,12 +2,12 @@
 
 interface MicrostructureProps {
   symbol: string
-  data?: any
+  data?: unknown
   fullscreen?: boolean
 }
 
-export default function MicrostructureAnalysis({ symbol, data, fullscreen }: MicrostructureProps) {
-  const mockData = data || {
+export default function MicrostructureAnalysis(_props: MicrostructureProps) {
+  const defaultMock = {
     bidAskSpread: 0.02,
     spreadCompression: false,
     quoteChangeRate: 45,
@@ -16,7 +16,9 @@ export default function MicrostructureAnalysis({ symbol, data, fullscreen }: Mic
     tradeIntensity: 87,
     volatilityRegime: 'NORMAL',
     orderImbalanceRatio: 1.35
-  }
+  } as const
+
+  const mockData = (_props.data ?? defaultMock) as typeof defaultMock
 
   return (
     <div style={{ padding: '20px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(138,180,248,0.1)' }}>

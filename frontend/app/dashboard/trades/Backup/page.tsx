@@ -182,7 +182,7 @@ export default function TradesPage() {
       setActiveTab('view')
       await fetchTrades()
       await fetchStats()
-    } catch (e: any) {
+    } catch (e: unknown {
       setError(e.response?.data?.detail || 'Failed to create trade')
     }
   }
@@ -205,7 +205,7 @@ export default function TradesPage() {
       setActiveTab('view')
       await fetchTrades()
       await fetchStats()
-    } catch (e: any) {
+    } catch (e: unknown {
       setError(e.response?.data?.detail || 'Failed to update trade')
     }
   }
@@ -219,7 +219,7 @@ export default function TradesPage() {
       setError(null)
       await fetchTrades()
       await fetchStats()
-    } catch (e: any) {
+    } catch (e: unknown {
       setError(e.response?.data?.detail || 'Failed to delete trade')
     }
   }

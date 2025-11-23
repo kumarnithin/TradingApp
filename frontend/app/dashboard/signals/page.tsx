@@ -134,8 +134,9 @@ export default function SignalsPage() {
       })
       setActiveTab('view')
       await fetchSignals()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to create signal')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      setError(e.response?.data?.detail || e.message || 'Failed to create signal')
     }
   }
 
@@ -145,8 +146,9 @@ export default function SignalsPage() {
       await axios.put(`${API_URL}/api/v1/signals/${signalId}`, { status: 'FILLED' })
       setError(null)
       await fetchSignals()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to update signal')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      setError(e.response?.data?.detail || e.message || 'Failed to update signal')
     }
   }
 
@@ -158,8 +160,9 @@ export default function SignalsPage() {
       await axios.delete(`${API_URL}/api/v1/signals/${signalId}`)
       setError(null)
       await fetchSignals()
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to cancel signal')
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      setError(e.response?.data?.detail || e.message || 'Failed to cancel signal')
     }
   }
 
