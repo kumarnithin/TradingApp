@@ -21,7 +21,11 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:password@localhost/trading_app"
 )
 
-logger.info(f"📊 Database URL: {DATABASE_URL}")
+# Avoid logging sensitive connection strings
+logger.info("📊 Database configured")
+
+# TradingView webhook passphrase (optional — set via env var)
+TRADINGVIEW_PASSPHRASE = os.getenv("TRADINGVIEW_PASSPHRASE", "")
 
 # Create SQLAlchemy engine
 engine = create_engine(

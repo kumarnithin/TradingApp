@@ -136,6 +136,25 @@ class Alert(Base):
     # Relationships
     account = relationship("Account", back_populates="alerts")
 
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=True)
+    signal_id = Column(Integer, ForeignKey("signals.id"), nullable=True)
+    action = Column(String(100), nullable=False)  # e.g., PLACE_ORDER, VALIDATION_REJECT
+    payload = Column(JSON, nullable=True)
+    simulated = Column(Boolean, default=False)
+    status = Column(String(50), default="PENDING")  # PENDING, SUCCESS, ERROR, REJECTED, SIMULATED
+    message = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships (optional)
+    user = relationship("User")
+    account = relationship("Account")
+
 # ==================== TRADING DISCIPLINE MODELS ====================
 
 class TradingTemplate(Base):

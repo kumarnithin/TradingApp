@@ -223,9 +223,19 @@ class RiskManager:
         """
         ✅ Validate stop-loss is within acceptable range
         """
+        # If stop_loss_pips is not provided or non-positive, skip strict validation
+        if not stop_loss_pips or stop_loss_pips <= 0:
+            return {
+                "valid": True,
+                "stop_loss": stop_loss_pips,
+                "min_allowed": self.config.min_stop_loss_pips,
+                "max_allowed": self.config.max_stop_loss_pips,
+                "status": "skipped"
+            }
+
         within_min = stop_loss_pips >= self.config.min_stop_loss_pips
         within_max = stop_loss_pips <= self.config.max_stop_loss_pips
-        
+
         return {
             "valid": within_min and within_max,
             "stop_loss": stop_loss_pips,

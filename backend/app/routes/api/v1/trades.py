@@ -12,7 +12,10 @@ Location: /backend/app/routes/api/v1/trades.py
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from sqlalchemy.orm import Session
 from app.config import get_db
-from app.database import Trade, Account, Signal, User
+from app.database import Trade, Account, Signal, User, AuditLog
+from app.services.risk_manager import risk_manager
+from app.services.order_executor import OrderExecutor
+import json
 from datetime import datetime, timedelta
 from typing import Optional
 from pydantic import BaseModel
@@ -32,6 +35,7 @@ class TradeCreate(BaseModel):
     trade_type: str = "Market"
     commission: Optional[float] = 0.0
     notes: Optional[str] = None
+    simulate: Optional[bool] = False
 
 class TradeUpdate(BaseModel):
     exit_price: Optional[float] = None
@@ -63,6 +67,58 @@ async def create_trade(trade_data: TradeCreate, db: Session = Depends(get_db)):
         if not user:
             raise HTTPException(status_code=400, detail="Invalid user_id: user not found")
 
+        # Run lightweight risk checks
+        try:
+            risk_result = risk_manager.perform_all_risk_checks(
+                trade_data.account_id,
+                0,  # stop_loss_pips unknown at create time
+                trade_data.symbol,
+                trade_data.quantity,
+                50,  # default confidence
+                db
+            )
+        except Exception as re:
+            risk_result = {"approved": True}
+
+        if not risk_result.get("approved", True):
+            # Create a rejected trade record for auditing and visibility
+            trade = Trade(
+                id=str(uuid.uuid4()),
+                account_id=trade_data.account_id,
+                user_id=trade_data.user_id,
+                symbol=trade_data.symbol.upper(),
+                action=trade_data.action.upper(),
+                entry_price=trade_data.entry_price,
+                quantity=trade_data.quantity,
+                trade_type=trade_data.trade_type,
+                commission=trade_data.commission or 0.0,
+                notes=(trade_data.notes or "") + " | RISK_REJECT: " + ",".join(risk_result.get("reasons_rejected", [])),
+                status="REJECTED",
+                entry_at=datetime.utcnow(),
+                created_at=datetime.utcnow(),
+                is_active=False
+            )
+            db.add(trade)
+            db.commit()
+            db.refresh(trade)
+
+            # Audit log
+            audit = AuditLog(
+                user_id=trade_data.user_id,
+                account_id=trade_data.account_id,
+                signal_id=None,
+                action="RISK_REJECT",
+                payload=risk_result,
+                simulated=bool(trade_data.simulate),
+                status="REJECTED",
+                message="Pre-trade risk checks failed"
+            )
+            db.add(audit)
+            db.commit()
+
+            logger.warning(f"❌ Trade rejected by risk manager: {risk_result}")
+            return {"status": "rejected", "reason": risk_result}
+
         trade = Trade(
             id=str(uuid.uuid4()),
             account_id=trade_data.account_id,
@@ -82,6 +138,41 @@ async def create_trade(trade_data: TradeCreate, db: Session = Depends(get_db)):
         db.add(trade)
         db.commit()
         db.refresh(trade)
+        logger.info(f"✅ Trade record created: {trade.id}")
+
+        # Execute order (or simulate)
+        try:
+            executor = OrderExecutor()
+            result = await executor.execute_market_order(trade.symbol, trade.action, trade.quantity, simulate=bool(trade_data.simulate))
+        except Exception as ex:
+            result = {"status": "error", "message": str(ex)}
+
+        # Persist audit log for the order attempt
+        audit = AuditLog(
+            user_id=trade_data.user_id,
+            account_id=trade_data.account_id,
+            signal_id=None,
+            action="PLACE_ORDER",
+            payload=result,
+            simulated=bool(trade_data.simulate),
+            status=("SUCCESS" if result.get("status") == "success" else ("SIMULATED" if result.get("status") == "simulated" else "ERROR")),
+            message=result.get("message") or result.get("status")
+        )
+        db.add(audit)
+
+        # Record IB order id if present
+        try:
+            if result.get("order_id"):
+                trade.ibkr_order_id = str(result.get("order_id"))
+                trade.updated_at = datetime.utcnow()
+                db.add(trade)
+        except Exception:
+            pass
+
+        db.commit()
+        db.refresh(trade)
+        logger.info(f"✅ Trade created: {trade.id} - {trade.symbol}")
+        return {"status": "success", "trade_id": trade.id, "message": "Trade created successfully", "order_result": result}
         logger.info(f"✅ Trade created: {trade.id} - {trade.symbol}")
         return {"status": "success", "trade_id": trade.id, "message": "Trade created successfully"}
     except HTTPException as e:

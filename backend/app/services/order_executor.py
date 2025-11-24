@@ -42,6 +42,8 @@ class OrderExecutor:
         symbol: str,
         action: str,
         quantity: float
+        ,
+        simulate: bool = False
     ) -> Dict:
         """
         Execute a market order (buy/sell at current price)
@@ -51,19 +53,31 @@ class OrderExecutor:
         quantity: How many shares
         """
         try:
+            # If simulate/dry-run is enabled, skip IB interactions entirely
+            if simulate:
+                logger.info(f"[SIMULATE] {action} {quantity} {symbol} (no order sent)")
+                return {
+                    "status": "simulated",
+                    "order_id": None,
+                    "symbol": symbol,
+                    "action": action,
+                    "quantity": quantity,
+                    "message": "Simulated order - no trade sent to IB"
+                }
+
             # Create a contract (specifies what to trade)
             contract = Stock(symbol, 'SMART', 'USD')
             await self.ib.qualifyContractsAsync(contract)
-            
+
             # Create an order (specifies how to trade)
             order = MarketOrder(action, quantity)
-            
+
             # Place the order
             trade = self.ib.placeOrder(contract, order)
             await asyncio.sleep(2)  # Wait for execution
-            
+
             logger.info(f"✅ Order placed: {action} {quantity} {symbol}")
-            
+
             return {
                 "status": "success",
                 "order_id": trade.order.orderId,
